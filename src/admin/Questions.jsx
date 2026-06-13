@@ -14,6 +14,17 @@ export default function Questions() {
 
   const [search, setSearch] = useState("");
 
+  const [editingQuestion, setEditingQuestion] =
+    useState(null);
+
+  const [editForm, setEditForm] =
+    useState({
+      question: "",
+      options: ["", "", "", ""],
+      correct_answer: 0,
+      explanation: "",
+    });
+
   useEffect(() => {
     loadTopics();
     loadQuestions();
@@ -69,6 +80,49 @@ export default function Questions() {
     setQuestions(data || []);
   }
 
+  function openEdit(question) {
+    setEditingQuestion(question);
+
+    setEditForm({
+      question: question.question,
+      options: [...question.options],
+      correct_answer:
+        question.correct_answer,
+      explanation:
+        question.explanation || "",
+    });
+  }
+
+  async function saveQuestion() {
+    if (!editingQuestion) return;
+
+    const { error } = await supabase
+      .from("questions")
+      .update({
+        question:
+          editForm.question,
+        options:
+          editForm.options,
+        correct_answer:
+          editForm.correct_answer,
+        explanation:
+          editForm.explanation,
+      })
+      .eq(
+        "id",
+        editingQuestion.id
+      );
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    setEditingQuestion(null);
+
+    loadQuestions();
+  }
+
   async function deleteQuestion(id) {
     const confirmed =
       window.confirm(
@@ -122,9 +176,14 @@ export default function Questions() {
             );
 
             setSelectedSubtopic("");
-            loadSubtopics(
-              e.target.value
-            );
+
+            if (e.target.value) {
+              loadSubtopics(
+                e.target.value
+              );
+            } else {
+              setSubtopics([]);
+            }
           }}
           className="border p-2 rounded"
         >
@@ -192,19 +251,153 @@ export default function Questions() {
               {q.question}
             </p>
 
-            <button
-              onClick={() =>
-                deleteQuestion(q.id)
-              }
-              className="text-red-600"
-            >
-              Delete
-            </button>
+            <div className="flex gap-4">
+
+              <button
+                onClick={() =>
+                  openEdit(q)
+                }
+                className="text-blue-600"
+              >
+                Edit
+              </button>
+
+              <button
+                onClick={() =>
+                  deleteQuestion(q.id)
+                }
+                className="text-red-600"
+              >
+                Delete
+              </button>
+
+            </div>
 
           </div>
         ))}
 
       </div>
+
+      {editingQuestion && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-6 z-50">
+
+          <div className="bg-white rounded-xl p-6 w-full max-w-2xl">
+
+            <h2 className="text-xl font-bold mb-4">
+              Edit Question
+            </h2>
+
+            <textarea
+              value={editForm.question}
+              onChange={(e) =>
+                setEditForm({
+                  ...editForm,
+                  question:
+                    e.target.value,
+                })
+              }
+              className="border p-2 rounded w-full mb-4"
+              rows={3}
+            />
+
+            {editForm.options.map(
+              (option, index) => (
+                <input
+                  key={index}
+                  value={option}
+                  onChange={(e) => {
+                    const updated = [
+                      ...editForm.options,
+                    ];
+
+                    updated[index] =
+                      e.target.value;
+
+                    setEditForm({
+                      ...editForm,
+                      options: updated,
+                    });
+                  }}
+                  className="border p-2 rounded w-full mb-2"
+                />
+              )
+            )}
+
+            <select
+              value={
+                editForm.correct_answer
+              }
+              onChange={(e) =>
+                setEditForm({
+                  ...editForm,
+                  correct_answer:
+                    Number(
+                      e.target.value
+                    ),
+                })
+              }
+              className="border p-2 rounded w-full mb-4"
+            >
+              <option value={0}>
+                Option A
+              </option>
+
+              <option value={1}>
+                Option B
+              </option>
+
+              <option value={2}>
+                Option C
+              </option>
+
+              <option value={3}>
+                Option D
+              </option>
+
+            </select>
+
+            <textarea
+              value={
+                editForm.explanation
+              }
+              onChange={(e) =>
+                setEditForm({
+                  ...editForm,
+                  explanation:
+                    e.target.value,
+                })
+              }
+              className="border p-2 rounded w-full mb-4"
+              rows={3}
+              placeholder="Explanation"
+            />
+
+            <div className="flex gap-4">
+
+              <button
+                onClick={saveQuestion}
+                className="bg-black text-white px-4 py-2 rounded"
+              >
+                Save
+              </button>
+
+              <button
+                onClick={() =>
+                  setEditingQuestion(
+                    null
+                  )
+                }
+                className="border px-4 py-2 rounded"
+              >
+                Cancel
+              </button>
+
+            </div>
+
+          </div>
+
+        </div>
+      )}
 
     </div>
   );
