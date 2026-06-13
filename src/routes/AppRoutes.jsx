@@ -12,6 +12,7 @@ import Quiz from "../pages/Quiz";
 import Results from "../pages/Results";
 import Login from "../pages/Login";
 import History from "../pages/History";
+import WrongQuestions from "../pages/WrongQuestions";
 
 export default function AppRoutes() {
   return (
@@ -45,6 +46,10 @@ export default function AppRoutes() {
       <Route
         path="/history"
         element={<History />}
+      />
+      <Route
+        path="/wrong-questions"
+        element={<WrongQuestions />}
       />
     </Routes>
   );

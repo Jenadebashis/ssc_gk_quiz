@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "../api/supabase";
 import { saveAttempt } from "../api/attempt";
+import { selectQuestions } from "../utils/questionSelectior";
 
 export default function Quiz() {
   const { state } = useLocation();
@@ -19,9 +20,53 @@ export default function Quiz() {
   }, []);
 
   async function loadQuestions() {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      navigate("/login");
+      return;
+    }
+
     let query = supabase
       .from("questions")
       .select("*");
+
+    if (state.mode === "wrong-questions") {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      const { data } = await supabase
+        .from("attempt_answers")
+        .select(`
+      *,
+      questions(*)
+    `)
+        .eq("user_id", user.id)
+        .order("answered_at", {
+          ascending: false,
+        });
+
+      const latestByQuestion = {};
+
+      data.forEach((row) => {
+        if (!latestByQuestion[row.question_id]) {
+          latestByQuestion[row.question_id] = row;
+        }
+      });
+
+      const wrongQuestions = Object.values(
+        latestByQuestion
+      )
+        .filter((row) => !row.is_correct)
+        .map((row) => row.questions);
+
+      setQuestions(wrongQuestions);
+      setLoading(false);
+      return;
+    }
 
     if (state.mode === "topic") {
       query = query.eq(
@@ -37,19 +82,43 @@ export default function Quiz() {
       );
     }
 
-    const { data, error } =
-      await query;
+    const {
+      data: candidateQuestions,
+      error,
+    } = await query;
 
     if (error) {
       console.error(error);
       return;
     }
 
-    const shuffled = [...data]
-      .sort(() => Math.random() - 0.5)
-      .slice(0, state.questionCount);
+    const questionIds =
+      candidateQuestions.map((q) => q.id);
 
-    setQuestions(shuffled);
+    const {
+      data: attemptData,
+    } = await supabase
+      .from("attempt_answers")
+      .select("question_id")
+      .eq("user_id", user.id)
+      .in("question_id", questionIds);
+
+    const attemptCounts = {};
+
+    attemptData?.forEach((row) => {
+      attemptCounts[row.question_id] =
+        (attemptCounts[row.question_id] || 0) + 1;
+    });
+
+    const selectedQuestions =
+      selectQuestions(
+        candidateQuestions,
+        attemptCounts,
+        state.questionCount
+      );
+
+    setQuestions(selectedQuestions);
+
     setLoading(false);
   }
 
