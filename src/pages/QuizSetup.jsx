@@ -29,9 +29,11 @@ export default function QuizSetup() {
 
         <h1 className="text-3xl font-bold mb-3">
 
-          {state.mode === "topic"
-            ? state.topicName
-            : state.subtopicName}
+          {
+            state.topicName ||
+            state.subtopicName ||
+            "Mixed Practice"
+          }
 
         </h1>
 

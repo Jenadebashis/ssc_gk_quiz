@@ -90,6 +90,19 @@ export default function Home() {
             ❌ Wrong Questions
           </button>
 
+          <button
+            onClick={() =>
+              navigate("/quiz-setup", {
+                state: {
+                  mode: "mixed",
+                  topicName: "Mixed Practice",
+                },
+              })
+            }
+            className="bg-white p-5 rounded-xl border text-left"
+          >
+            🎲 Mixed Practice
+          </button>
         </div>
 
       </div>

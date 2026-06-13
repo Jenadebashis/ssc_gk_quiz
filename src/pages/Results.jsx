@@ -34,9 +34,11 @@ export default function Results() {
 
       <div className="bg-white border rounded-xl p-6 mb-8">
 
-        <h1 className="text-3xl font-bold">
-          Quiz Result
-        </h1>
+        <h2 className="text-lg text-gray-600 mt-2">
+          {state.quizInfo?.topicName ||
+            state.quizInfo?.subtopicName ||
+            "Mixed Practice"}
+        </h2>
 
         <div className="mt-4 space-y-2">
 
