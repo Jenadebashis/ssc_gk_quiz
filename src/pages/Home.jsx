@@ -2,10 +2,20 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../api/supabase";
 import { getUserStats } from "../api/stats";
+import {
+  getDailyTarget,
+  saveDailyTarget,
+  getTodayProgress,
+} from "../api/dailyTarget";
 
 export default function Home() {
   const [topics, setTopics] = useState([]);
   const [stats, setStats] = useState(null);
+  const [dailyTarget, setDailyTarget] =
+    useState(50);
+
+  const [todaySolved, setTodaySolved] =
+    useState(0);
 
   const navigate = useNavigate();
 
@@ -47,6 +57,33 @@ export default function Home() {
       await getUserStats(user.id);
 
     setStats(result);
+
+    const targetData =
+      await getDailyTarget(user.id);
+
+    if (targetData) {
+      setDailyTarget(
+        targetData.target_questions
+      );
+    }
+
+    const solved =
+      await getTodayProgress(user.id);
+
+    setTodaySolved(solved);
+  }
+
+  async function updateTarget() {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) return;
+
+    await saveDailyTarget(
+      user.id,
+      Number(dailyTarget)
+    );
   }
 
   useEffect(() => {
@@ -69,6 +106,84 @@ export default function Home() {
             Practice topic-wise, revise mistakes,
             and improve your score every day.
           </p>
+
+        </div>
+        <div className="bg-white rounded-3xl border p-6 mb-8 shadow-sm">
+
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+
+            <div>
+
+              <h2 className="text-2xl font-bold">
+                🎯 Daily Target
+              </h2>
+
+              <p className="text-gray-500 mt-1">
+                {todaySolved} / {dailyTarget}
+                {" "}
+                Questions Completed Today
+              </p>
+
+              {todaySolved >= dailyTarget && (
+                <p className="text-green-600 font-semibold mt-2">
+                  ✅ Target Achieved
+                </p>
+              )}
+
+            </div>
+
+            <div className="flex gap-2">
+
+              <input
+                type="number"
+                min={1}
+                value={dailyTarget}
+                onChange={(e) =>
+                  setDailyTarget(
+                    e.target.value
+                  )
+                }
+                className="
+          border
+          rounded-xl
+          px-4
+          py-2
+          w-24
+        "
+              />
+
+              <button
+                onClick={updateTarget}
+                className="
+          bg-indigo-600
+          text-white
+          px-5
+          rounded-xl
+          hover:bg-indigo-700
+        "
+              >
+                Save
+              </button>
+
+            </div>
+
+          </div>
+
+          <div className="mt-5 w-full bg-gray-200 rounded-full h-4">
+
+            <div
+              className="bg-indigo-600 h-4 rounded-full transition-all"
+              style={{
+                width: `${Math.min(
+                  (todaySolved /
+                    dailyTarget) *
+                  100,
+                  100
+                )}%`,
+              }}
+            />
+
+          </div>
 
         </div>
 
