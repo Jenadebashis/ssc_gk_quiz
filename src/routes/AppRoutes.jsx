@@ -13,6 +13,7 @@ import Results from "../pages/Results";
 import Login from "../pages/Login";
 import History from "../pages/History";
 import WrongQuestions from "../pages/WrongQuestions";
+import Questions from "../admin/Questions";
 
 export default function AppRoutes() {
   return (
@@ -50,6 +51,10 @@ export default function AppRoutes() {
       <Route
         path="/wrong-questions"
         element={<WrongQuestions />}
+      />
+      <Route
+        path="/admin/questions"
+        element={<Questions />}
       />
     </Routes>
   );
