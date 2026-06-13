@@ -1,8 +1,12 @@
+import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 export default function Results() {
   const { state } = useLocation();
   const navigate = useNavigate();
+
+  const [showIncorrectOnly, setShowIncorrectOnly] =
+    useState(false);
 
   if (!state) {
     return <div className="p-10">No Result Found</div>;
@@ -23,6 +27,13 @@ export default function Results() {
   const total = questions.length;
 
   const wrong = total - correct;
+
+  const incorrectCount =
+    questions.filter(
+      (q) =>
+        answers[q.id] !==
+        q.correct_answer
+    ).length;
 
   const percentage =
     total === 0
@@ -69,61 +80,101 @@ export default function Results() {
 
       </div>
 
+      <div className="flex gap-3 mb-6">
+
+        <button
+          onClick={() =>
+            setShowIncorrectOnly(false)
+          }
+          className={`px-4 py-2 rounded ${!showIncorrectOnly
+              ? "bg-black text-white"
+              : "border"
+            }`}
+        >
+          All Questions
+        </button>
+
+        <button
+          onClick={() =>
+            setShowIncorrectOnly(true)
+          }
+          className={`px-4 py-2 rounded ${showIncorrectOnly
+              ? "bg-black text-white"
+              : "border"
+            }`}
+        >
+          Incorrect Only ({incorrectCount})
+        </button>
+
+      </div>
+
       <div className="space-y-6">
 
-        {questions.map((q, index) => {
-          const userAnswer =
-            answers[q.id];
+        {questions
+          .filter((q) => {
+            if (!showIncorrectOnly) {
+              return true;
+            }
 
-          const isCorrect =
-            userAnswer ===
-            q.correct_answer;
+            return (
+              answers[q.id] !==
+              q.correct_answer
+            );
+          })
+          .map((q, index) => {
 
-          return (
-            <div
-              key={q.id}
-              className="border rounded-xl p-5 bg-white"
-            >
-              <h3 className="font-semibold mb-4">
-                {index + 1}. {q.question}
-              </h3>
+            const userAnswer =
+              answers[q.id];
 
-              <p>
-                Your Answer:
-                {" "}
-                {userAnswer !== undefined
-                  ? q.options[userAnswer]
-                  : "Not Answered"}
-              </p>
+            const isCorrect =
+              userAnswer ===
+              q.correct_answer;
 
-              <p>
-                Correct Answer:
-                {" "}
-                {
-                  q.options[
-                  q.correct_answer
-                  ]
-                }
-              </p>
+            return (
+              <div
+                key={q.id}
+                className="border rounded-xl p-5 bg-white"
+              >
+                <h3 className="font-semibold mb-4">
+                  {index + 1}. {q.question}
+                </h3>
 
-              <p>
-                Status:
-                {" "}
-                {isCorrect
-                  ? "✅ Correct"
-                  : "❌ Wrong"}
-              </p>
-
-              {q.explanation && (
-                <p className="mt-2 text-gray-600">
-                  Explanation:
+                <p>
+                  Your Answer:
                   {" "}
-                  {q.explanation}
+                  {userAnswer !== undefined
+                    ? q.options[userAnswer]
+                    : "Not Answered"}
                 </p>
-              )}
-            </div>
-          );
-        })}
+
+                <p>
+                  Correct Answer:
+                  {" "}
+                  {
+                    q.options[
+                    q.correct_answer
+                    ]
+                  }
+                </p>
+
+                <p>
+                  Status:
+                  {" "}
+                  {isCorrect
+                    ? "✅ Correct"
+                    : "❌ Wrong"}
+                </p>
+
+                {q.explanation && (
+                  <p className="mt-2 text-gray-600">
+                    Explanation:
+                    {" "}
+                    {q.explanation}
+                  </p>
+                )}
+              </div>
+            );
+          })}
       </div>
 
     </div>
