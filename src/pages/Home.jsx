@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../api/supabase";
+import { getUserStats } from "../api/stats";
 
 export default function Home() {
   const [topics, setTopics] = useState([]);
+  const [stats, setStats] = useState(null);
 
   const navigate = useNavigate();
 
@@ -34,8 +36,22 @@ export default function Home() {
     setTopics(finalTopics);
   }
 
+  async function loadStats() {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) return;
+
+    const result =
+      await getUserStats(user.id);
+
+    setStats(result);
+  }
+
   useEffect(() => {
     loadTopics();
+    loadStats();
   }, []);
 
   return (
@@ -55,6 +71,52 @@ export default function Home() {
           </p>
 
         </div>
+
+        {stats && (
+          <div className="grid md:grid-cols-4 gap-4 mb-10">
+
+            <div className="bg-white p-5 rounded-2xl border shadow-sm">
+              <p className="text-gray-500 text-sm">
+                Questions Solved
+              </p>
+
+              <h3 className="text-3xl font-bold mt-2">
+                {stats.questionsSolved}
+              </h3>
+            </div>
+
+            <div className="bg-white p-5 rounded-2xl border shadow-sm">
+              <p className="text-gray-500 text-sm">
+                Attempts
+              </p>
+
+              <h3 className="text-3xl font-bold mt-2">
+                {stats.totalAttempts}
+              </h3>
+            </div>
+
+            <div className="bg-white p-5 rounded-2xl border shadow-sm">
+              <p className="text-gray-500 text-sm">
+                Accuracy
+              </p>
+
+              <h3 className="text-3xl font-bold mt-2 text-green-600">
+                {stats.accuracy}%
+              </h3>
+            </div>
+
+            <div className="bg-white p-5 rounded-2xl border shadow-sm">
+              <p className="text-gray-500 text-sm">
+                Wrong Questions
+              </p>
+
+              <h3 className="text-3xl font-bold mt-2 text-red-600">
+                {stats.wrongQuestions}
+              </h3>
+            </div>
+
+          </div>
+        )}
 
         <div className="grid md:grid-cols-2 gap-4 mb-10">
 
@@ -97,15 +159,15 @@ export default function Home() {
                 navigate(`/topic/${topic.id}`)
               }
               className="
-              bg-white
-              p-6
-              rounded-2xl
-              border
-              cursor-pointer
-              hover:shadow-xl
-              hover:border-indigo-500
-              transition
-            "
+                bg-white
+                p-6
+                rounded-2xl
+                border
+                cursor-pointer
+                hover:shadow-xl
+                hover:border-indigo-500
+                transition
+              "
             >
               <h2 className="text-xl font-bold mb-2">
                 📚 {topic.name}
@@ -128,17 +190,19 @@ export default function Home() {
           <div className="grid md:grid-cols-3 gap-4">
 
             <button
-              onClick={() => navigate("/history")}
+              onClick={() =>
+                navigate("/history")
+              }
               className="
-              bg-slate-50
-              hover:bg-white
-              hover:shadow-lg
-              transition
-              p-6
-              rounded-2xl
-              border
-              text-left
-            "
+                bg-slate-50
+                hover:bg-white
+                hover:shadow-lg
+                transition
+                p-6
+                rounded-2xl
+                border
+                text-left
+              "
             >
               <div className="text-3xl mb-2">
                 📜
@@ -158,15 +222,15 @@ export default function Home() {
                 navigate("/wrong-questions")
               }
               className="
-              bg-slate-50
-              hover:bg-white
-              hover:shadow-lg
-              transition
-              p-6
-              rounded-2xl
-              border
-              text-left
-            "
+                bg-slate-50
+                hover:bg-white
+                hover:shadow-lg
+                transition
+                p-6
+                rounded-2xl
+                border
+                text-left
+              "
             >
               <div className="text-3xl mb-2">
                 ❌
@@ -186,20 +250,21 @@ export default function Home() {
                 navigate("/quiz-setup", {
                   state: {
                     mode: "mixed",
-                    topicName: "Mixed Practice",
+                    topicName:
+                      "Mixed Practice",
                   },
                 })
               }
               className="
-              bg-slate-50
-              hover:bg-white
-              hover:shadow-lg
-              transition
-              p-6
-              rounded-2xl
-              border
-              text-left
-            "
+                bg-slate-50
+                hover:bg-white
+                hover:shadow-lg
+                transition
+                p-6
+                rounded-2xl
+                border
+                text-left
+              "
             >
               <div className="text-3xl mb-2">
                 🎲
@@ -210,7 +275,8 @@ export default function Home() {
               </h3>
 
               <p className="text-sm text-gray-500">
-                Practice all subjects together
+                Practice all subjects
+                together
               </p>
             </button>
 
