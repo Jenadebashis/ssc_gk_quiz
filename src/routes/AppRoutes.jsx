@@ -14,48 +14,53 @@ import Login from "../pages/Login";
 import History from "../pages/History";
 import WrongQuestions from "../pages/WrongQuestions";
 import Questions from "../admin/Questions";
+import AdminGuard from "../components/AdminGuard";
 
 export default function AppRoutes() {
   return (
     <Routes>
       <Route path="/" element={<Home />} />
 
-      <Route path="/admin" element={<Dashboard />} />
-      <Route path="/admin/topics" element={<Topics />} />
-      <Route path="/admin/subtopics" element={<Subtopics />} />
-      <Route path="/admin/upload" element={<UploadQuestions />} />
-      <Route
+      <Route path="/admin" element={<AdminGuard><Dashboard /></AdminGuard>} />
+      <Route path="/admin/topics" element={<AdminGuard><Topics /></AdminGuard>} />
+      <Route path="/admin/subtopics" element={<AdminGuard><Subtopics /></AdminGuard>} />
+      < Route path="/admin/upload" element={<AdminGuard>< UploadQuestions /></AdminGuard>} />
+      < Route
         path="/topic/:topicId"
-        element={<TopicDetails />}
+        element={< TopicDetails />}
       />
-      <Route
+      < Route
         path="/quiz-setup"
-        element={<QuizSetup />}
+        element={< QuizSetup />}
       />
-      <Route
+      < Route
         path="/quiz"
-        element={<Quiz />}
+        element={< Quiz />}
       />
-      <Route
+      < Route
         path="/results"
-        element={<Results />}
+        element={< Results />}
       />
-      <Route
+      < Route
         path="/login"
-        element={<Login />}
+        element={< Login />}
       />
-      <Route
+      < Route
         path="/history"
-        element={<History />}
+        element={< History />}
       />
-      <Route
+      < Route
         path="/wrong-questions"
-        element={<WrongQuestions />}
+        element={< WrongQuestions />}
       />
-      <Route
+      < Route
         path="/admin/questions"
-        element={<Questions />}
+        element={
+          < AdminGuard >
+            <Questions />
+          </AdminGuard >
+        }
       />
-    </Routes>
+    </Routes >
   );
 }
