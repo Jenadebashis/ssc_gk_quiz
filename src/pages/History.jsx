@@ -7,6 +7,9 @@ export default function History() {
   const [loading, setLoading] =
     useState(true);
 
+  const [modeFilter, setModeFilter] =
+    useState("all");
+
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -89,6 +92,31 @@ export default function History() {
         Attempt History
       </h1>
 
+      <div className="flex gap-2 flex-wrap mb-6">
+
+        {[
+          ["all", "All"],
+          ["topic", "Topic"],
+          ["subtopic", "Subtopic"],
+          ["mixed", "Mixed"],
+          ["wrong-questions", "Wrong"],
+        ].map(([value, label]) => (
+          <button
+            key={value}
+            onClick={() =>
+              setModeFilter(value)
+            }
+            className={`px-4 py-2 rounded-lg ${modeFilter === value
+                ? "bg-black text-white"
+                : "border"
+              }`}
+          >
+            {label}
+          </button>
+        ))}
+
+      </div>
+
       {attempts.length === 0 ? (
         <div className="bg-white border rounded-xl p-8 text-center">
           No attempts found.
@@ -96,115 +124,128 @@ export default function History() {
       ) : (
         <div className="grid gap-4">
 
-          {attempts.map((attempt) => {
-            const percentage =
-              Number(
-                attempt.score_percent
-              ).toFixed(2);
+          {attempts
+            .filter((attempt) => {
+              if (
+                modeFilter === "all"
+              ) {
+                return true;
+              }
 
-            return (
-              <div
-                key={attempt.id}
-                onClick={() =>
-                  navigate(
-                    `/attempt/${attempt.id}`
-                  )
-                }
-                className="
-                  bg-white
-                  border
-                  rounded-xl
-                  p-5
-                  cursor-pointer
-                  hover:shadow-lg
-                  transition
-                "
-              >
+              return (
+                attempt.mode ===
+                modeFilter
+              );
+            })
+            .map((attempt) => {
+              const percentage =
+                Number(
+                  attempt.score_percent
+                ).toFixed(2);
 
-                <div className="flex justify-between items-start">
+              return (
+                <div
+                  key={attempt.id}
+                  onClick={() =>
+                    navigate(
+                      `/attempt/${attempt.id}`
+                    )
+                  }
+                  className="
+                    bg-white
+                    border
+                    rounded-xl
+                    p-5
+                    cursor-pointer
+                    hover:shadow-lg
+                    transition
+                  "
+                >
 
-                  <div>
+                  <div className="flex justify-between items-start">
 
-                    <h3 className="text-lg font-bold">
-                      {attempt.mode ===
-                        "mixed"
-                        ? "Mixed Practice"
-                        : attempt.mode ===
-                          "wrong-questions"
-                          ? "Wrong Questions"
+                    <div>
+
+                      <h3 className="text-lg font-bold">
+                        {attempt.mode ===
+                          "mixed"
+                          ? "Mixed Practice"
                           : attempt.mode ===
-                            "subtopic"
-                            ? "Subtopic Practice"
-                            : "Topic Practice"}
-                    </h3>
+                            "wrong-questions"
+                            ? "Wrong Questions"
+                            : attempt.mode ===
+                              "subtopic"
+                              ? "Subtopic Practice"
+                              : "Topic Practice"}
+                      </h3>
 
-                    <p className="text-sm text-gray-500 mt-1">
-                      {new Date(
-                        attempt.completed_at
-                      ).toLocaleString()}
-                    </p>
-
-                  </div>
-
-                  <div className="flex items-start gap-4">
-
-                    <div className="text-right">
-
-                      <p className="text-xl font-bold">
-                        {
-                          attempt.correct_answers
-                        }
-                        /
-                        {
-                          attempt.total_questions
-                        }
-                      </p>
-
-                      <p className="text-sm text-gray-500">
-                        {percentage}%
+                      <p className="text-sm text-gray-500 mt-1">
+                        {new Date(
+                          attempt.completed_at
+                        ).toLocaleString()}
                       </p>
 
                     </div>
 
-                    <button
-                      onClick={(e) =>
-                        deleteAttempt(
-                          e,
-                          attempt.id
-                        )
-                      }
-                      className="
-                        text-red-500
-                        hover:text-red-700
-                        text-xl
-                      "
-                      title="Delete Attempt"
-                    >
-                      🗑️
-                    </button>
+                    <div className="flex items-start gap-4">
+
+                      <div className="text-right">
+
+                        <p className="text-xl font-bold">
+                          {
+                            attempt.correct_answers
+                          }
+                          /
+                          {
+                            attempt.total_questions
+                          }
+                        </p>
+
+                        <p className="text-sm text-gray-500">
+                          {percentage}%
+                        </p>
+
+                      </div>
+
+                      <button
+                        onClick={(e) =>
+                          deleteAttempt(
+                            e,
+                            attempt.id
+                          )
+                        }
+                        className="
+                          text-red-500
+                          hover:text-red-700
+                          text-xl
+                        "
+                        title="Delete Attempt"
+                      >
+                        🗑️
+                      </button>
+
+                    </div>
+
+                  </div>
+
+                  <div className="mt-4">
+
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+
+                      <div
+                        className="bg-black h-2 rounded-full"
+                        style={{
+                          width: `${percentage}%`,
+                        }}
+                      />
+
+                    </div>
 
                   </div>
 
                 </div>
-
-                <div className="mt-4">
-
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-
-                    <div
-                      className="bg-black h-2 rounded-full"
-                      style={{
-                        width: `${percentage}%`,
-                      }}
-                    />
-
-                  </div>
-
-                </div>
-
-              </div>
-            );
-          })}
+              );
+            })}
 
         </div>
       )}
