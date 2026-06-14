@@ -15,6 +15,7 @@ import History from "../pages/History";
 import WrongQuestions from "../pages/WrongQuestions";
 import Questions from "../admin/Questions";
 import AdminGuard from "../components/AdminGuard";
+import AttemptReview from "../pages/AttemptReview";
 
 export default function AppRoutes() {
   return (
@@ -60,6 +61,10 @@ export default function AppRoutes() {
             <Questions />
           </AdminGuard >
         }
+      />
+      <Route
+        path="/attempt/:attemptId"
+        element={<AttemptReview />}
       />
     </Routes >
   );
