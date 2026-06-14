@@ -21,7 +21,6 @@ export async function saveDailyTarget(
     .upsert({
       user_id: userId,
       target_questions: target,
-      updated_at: new Date(),
     });
 }
 

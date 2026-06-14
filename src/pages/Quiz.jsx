@@ -207,7 +207,6 @@ export default function Quiz() {
         </h3>
 
         <div className="space-y-3">
-
           {question.options.map(
             (option, index) => (
               <button
@@ -215,20 +214,40 @@ export default function Quiz() {
                 onClick={() =>
                   selectAnswer(index)
                 }
-                className={`block w-full text-left border rounded p-3
+                className={`w-full text-left rounded-xl p-4 border transition-all duration-200 flex items-center justify-between
 
-                ${answers[
-                    question.id
-                  ] === index
-                    ? "border-black"
-                    : ""
+        ${answers[question.id] === index
+                    ? "bg-green-500 text-white border-green-600 shadow-lg"
+                    : "bg-white border-gray-300 hover:bg-green-50 hover:border-green-400"
                   }`}
               >
-                {option}
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`w-8 h-8 rounded-full flex items-center justify-center font-bold
+
+            ${answers[question.id] ===
+                        index
+                        ? "bg-white text-green-600"
+                        : "bg-gray-100"
+                      }`}
+                  >
+                    {String.fromCharCode(
+                      65 + index
+                    )}
+                  </div>
+
+                  <span>{option}</span>
+                </div>
+
+                {answers[question.id] ===
+                  index && (
+                    <span className="text-xl">
+                      ✓
+                    </span>
+                  )}
               </button>
             )
           )}
-
         </div>
 
       </div>
