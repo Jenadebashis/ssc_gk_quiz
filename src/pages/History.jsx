@@ -42,6 +42,38 @@ export default function History() {
     setLoading(false);
   }
 
+  async function deleteAttempt(
+    e,
+    attemptId
+  ) {
+    e.stopPropagation();
+
+    const confirmed =
+      window.confirm(
+        "Delete this attempt?"
+      );
+
+    if (!confirmed) return;
+
+    const { error } =
+      await supabase
+        .from("attempts")
+        .delete()
+        .eq("id", attemptId);
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    setAttempts((prev) =>
+      prev.filter(
+        (attempt) =>
+          attempt.id !== attemptId
+      )
+    );
+  }
+
   if (loading) {
     return (
       <div className="max-w-5xl mx-auto p-6">
@@ -114,21 +146,42 @@ export default function History() {
 
                   </div>
 
-                  <div className="text-right">
+                  <div className="flex items-start gap-4">
 
-                    <p className="text-xl font-bold">
-                      {
-                        attempt.correct_answers
-                      }
-                      /
-                      {
-                        attempt.total_questions
-                      }
-                    </p>
+                    <div className="text-right">
 
-                    <p className="text-sm text-gray-500">
-                      {percentage}%
-                    </p>
+                      <p className="text-xl font-bold">
+                        {
+                          attempt.correct_answers
+                        }
+                        /
+                        {
+                          attempt.total_questions
+                        }
+                      </p>
+
+                      <p className="text-sm text-gray-500">
+                        {percentage}%
+                      </p>
+
+                    </div>
+
+                    <button
+                      onClick={(e) =>
+                        deleteAttempt(
+                          e,
+                          attempt.id
+                        )
+                      }
+                      className="
+                        text-red-500
+                        hover:text-red-700
+                        text-xl
+                      "
+                      title="Delete Attempt"
+                    >
+                      🗑️
+                    </button>
 
                   </div>
 
