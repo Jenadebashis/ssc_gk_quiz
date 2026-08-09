@@ -283,6 +283,8 @@ export default function Quiz() {
         quizInfo: state,
         questions,
         answers,
+        mixedPracticeRunId: state.mixedPracticeRunId || null,
+        mixedPracticeSetNumber: state.setNumber || null,
       });
 
       navigate("/results", {

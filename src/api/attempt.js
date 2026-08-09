@@ -5,6 +5,8 @@ export async function saveAttempt({
   quizInfo,
   questions,
   answers,
+  mixedPracticeRunId = null,
+  mixedPracticeSetNumber = null,
 }) {
   let correct = 0;
 
@@ -21,8 +23,7 @@ export async function saveAttempt({
       ? 0
       : (correct * 100) / total;
 
-  // create attempt
-
+  // Create attempt
   const { data: attempt, error: attemptError } =
     await supabase
       .from("attempts")
@@ -36,6 +37,12 @@ export async function saveAttempt({
 
         subtopic_id:
           quizInfo.subtopicId || null,
+
+        mixed_practice_run_id:
+          mixedPracticeRunId,
+
+        mixed_practice_set_number:
+          mixedPracticeSetNumber,
 
         total_questions: total,
 
@@ -54,8 +61,7 @@ export async function saveAttempt({
     throw attemptError;
   }
 
-  // save answers
-
+  // Save answers
   const answerRows = questions.map((q) => ({
     attempt_id: attempt.id,
 
@@ -70,8 +76,7 @@ export async function saveAttempt({
       q.correct_answer,
 
     is_correct:
-      answers[q.id] ===
-      q.correct_answer,
+      answers[q.id] === q.correct_answer,
   }));
 
   const { error: answersError } =

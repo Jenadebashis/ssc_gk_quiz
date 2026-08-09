@@ -286,7 +286,7 @@ export default function Home() {
             <div
               key={topic.id}
               onClick={() =>
-                navigate(`/ topic / ${topic.id} `)
+                navigate(`/topic/${topic.id}`)
               }
               className="
                 bg-white

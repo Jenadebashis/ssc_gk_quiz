@@ -26,11 +26,15 @@ async function fetchQuestionsForTopics(topicIds) {
 
       if (byName !== 0) return byName;
 
-      return new Date(a.created_at || 0).getTime() -
-        new Date(b.created_at || 0).getTime();
+      return (
+        new Date(a.created_at || 0).getTime() -
+        new Date(b.created_at || 0).getTime()
+      );
     });
 
-    const subtopicIds = orderedSubtopics.map((subtopic) => subtopic.id);
+    const subtopicIds = orderedSubtopics.map(
+      (subtopic) => subtopic.id
+    );
 
     for (const subtopicId of subtopicIds) {
       for (let from = 0; ; from += PAGE_SIZE) {
@@ -52,7 +56,7 @@ async function fetchQuestionsForTopics(topicIds) {
 
     // Include questions that do not have a subtopic.
     for (let from = 0; ; from += PAGE_SIZE) {
-      let query = supabase
+      const query = supabase
         .from("questions")
         .select("id, topic_id, subtopic_id, created_at")
         .eq("topic_id", topicId)
@@ -128,10 +132,36 @@ export default function MixedPracticeSets() {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState("");
+  const [attemptCounts, setAttemptCounts] = useState({});
 
   useEffect(() => {
     loadCurrentRun();
   }, []);
+
+  async function loadAttemptCounts(userId, runId) {
+    const { data, error } = await supabase
+      .from("attempts")
+      .select("mixed_practice_set_number")
+      .eq("user_id", userId)
+      .eq("mixed_practice_run_id", runId)
+      .not("mixed_practice_set_number", "is", null);
+
+    if (error) {
+      throw error;
+    }
+
+    const counts = {};
+
+    (data || []).forEach((attempt) => {
+      const setNumber =
+        attempt.mixed_practice_set_number;
+
+      counts[setNumber] =
+        (counts[setNumber] || 0) + 1;
+    });
+
+    setAttemptCounts(counts);
+  }
 
   async function loadCurrentRun() {
     if (loadingRunRef.current) return;
@@ -151,14 +181,17 @@ export default function MixedPracticeSets() {
         return;
       }
 
-      const { data: run, error: runError } = await supabase
-        .from("mixed_practice_runs")
-        .select("id, total_questions")
-        .eq("user_id", user.id)
-        .eq("status", "active")
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      const { data: run, error: runError } =
+        await supabase
+          .from("mixed_practice_runs")
+          .select("id, total_questions")
+          .eq("user_id", user.id)
+          .eq("status", "active")
+          .order("created_at", {
+            ascending: false,
+          })
+          .limit(1)
+          .maybeSingle();
 
       if (runError) throw runError;
 
@@ -172,16 +205,23 @@ export default function MixedPracticeSets() {
       setRunId(run.id);
       setTotalQuestions(run.total_questions);
       setSets(groupRunRows(rows || []));
+
+      await loadAttemptCounts(user.id, run.id);
     } catch (err) {
       console.error(err);
-      setError(err.message || "Failed to load mixed practice sets.");
+      setError(
+        err.message ||
+        "Failed to load mixed practice sets."
+      );
     } finally {
       loadingRunRef.current = false;
       setLoading(false);
     }
   }
 
-  async function generateNewRun(userIdOverride = null) {
+  async function generateNewRun(
+    userIdOverride = null
+  ) {
     try {
       setGenerating(true);
       setError("");
@@ -201,7 +241,10 @@ export default function MixedPracticeSets() {
         userId = user.id;
       }
 
-      const { data: topics, error: topicsError } = await supabase
+      const {
+        data: topics,
+        error: topicsError,
+      } = await supabase
         .from("topics")
         .select("id, name")
         .order("name", { ascending: true });
@@ -213,42 +256,55 @@ export default function MixedPracticeSets() {
         fetchQuestionsForTopics,
       });
 
-      const { data: run, error: runError } = await supabase
-        .from("mixed_practice_runs")
-        .insert({
-          user_id: userId,
-          total_questions: generated.totalQuestions,
-          set_size: 50,
-          status: "active",
-        })
-        .select("id")
-        .single();
+      const { data: run, error: runError } =
+        await supabase
+          .from("mixed_practice_runs")
+          .insert({
+            user_id: userId,
+            total_questions:
+              generated.totalQuestions,
+            set_size: 50,
+            status: "active",
+          })
+          .select("id")
+          .single();
 
       if (runError) throw runError;
 
-      const rows = generated.sets.flatMap((practiceSet) =>
-        practiceSet.questions.map((question, position) => ({
-          run_id: run.id,
-          question_id: question.id,
-          subject: question.subject,
-          set_number: practiceSet.number,
-          position,
-          strategy: practiceSet.strategy,
-        }))
+      const rows = generated.sets.flatMap(
+        (practiceSet) =>
+          practiceSet.questions.map(
+            (question, position) => ({
+              run_id: run.id,
+              question_id: question.id,
+              subject: question.subject,
+              set_number: practiceSet.number,
+              position,
+              strategy: practiceSet.strategy,
+            })
+          )
       );
 
-      // Insert in batches so large question banks do not create one oversized request.
+      // Insert in batches so large question banks
+      // do not create one oversized request.
       const INSERT_BATCH_SIZE = 500;
 
-      for (let from = 0; from < rows.length; from += INSERT_BATCH_SIZE) {
+      for (
+        let from = 0;
+        from < rows.length;
+        from += INSERT_BATCH_SIZE
+      ) {
         const batch = rows.slice(
           from,
           from + INSERT_BATCH_SIZE
         );
 
-        const { error: rowsError } = await supabase
-          .from("mixed_practice_run_questions")
-          .insert(batch);
+        const { error: rowsError } =
+          await supabase
+            .from(
+              "mixed_practice_run_questions"
+            )
+            .insert(batch);
 
         if (rowsError) {
           await supabase
@@ -260,8 +316,9 @@ export default function MixedPracticeSets() {
         }
       }
 
-      // There should be only one active sequence for the user. Retire older ones
-      // after the new sequence has been successfully persisted.
+      // There should be only one active sequence
+      // for the user. Retire older ones after the
+      // new sequence has been successfully persisted.
       await supabase
         .from("mixed_practice_runs")
         .update({ status: "completed" })
@@ -270,19 +327,26 @@ export default function MixedPracticeSets() {
         .neq("id", run.id);
 
       setRunId(run.id);
-      setTotalQuestions(generated.totalQuestions);
+      setTotalQuestions(
+        generated.totalQuestions
+      );
+
       setSets(
         generated.sets.map((practiceSet) => ({
           number: practiceSet.number,
           strategy: practiceSet.strategy,
-          questionIds: practiceSet.questions.map(
-            (question) => question.id
-          ),
+          questionIds:
+            practiceSet.questions.map(
+              (question) => question.id
+            ),
         }))
       );
     } catch (err) {
       console.error(err);
-      setError(err.message || "Failed to generate mixed practice sets.");
+      setError(
+        err.message ||
+        "Failed to generate mixed practice sets."
+      );
     } finally {
       setGenerating(false);
       setLoading(false);
@@ -296,14 +360,19 @@ export default function MixedPracticeSets() {
         topicName: "Mixed Practice",
         setNumber: practiceSet.number,
         questionIds: practiceSet.questionIds,
-        questionCount: practiceSet.questionIds.length,
+        questionCount:
+          practiceSet.questionIds.length,
         mixedPracticeRunId: runId,
       },
     });
   }
 
   if (loading) {
-    return <div className="p-10">Loading Mixed Practice Sets...</div>;
+    return (
+      <div className="p-10">
+        Loading Mixed Practice Sets...
+      </div>
+    );
   }
 
   return (
@@ -318,15 +387,23 @@ export default function MixedPracticeSets() {
 
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-4xl font-bold" style={{ color: "#f97316" }}>
+            <h1
+              className="text-4xl font-bold"
+              style={{ color: "#f97316" }}
+            >
               Mixed Practice Sets
             </h1>
+
             <p className="text-gray-500 mt-2">
-              {totalQuestions} total questions · {sets.length} sets
+              {totalQuestions} total questions ·{" "}
+              {sets.length} sets
             </p>
+
             <p className="text-sm text-gray-500 mt-2">
-              First use: PYQ-weighted ratio. As subjects become depleted,
-              allocation automatically follows the remaining inventory.
+              First use: PYQ-weighted ratio. As
+              subjects become depleted, allocation
+              automatically follows the remaining
+              inventory.
             </p>
           </div>
 
@@ -335,7 +412,9 @@ export default function MixedPracticeSets() {
             disabled={generating}
             className="bg-white border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-100 disabled:opacity-50"
           >
-            {generating ? "Generating..." : "New Random Sequence"}
+            {generating
+              ? "Generating..."
+              : "New Random Sequence"}
           </button>
         </div>
 
@@ -349,24 +428,45 @@ export default function MixedPracticeSets() {
           {sets.map((practiceSet) => (
             <div
               key={practiceSet.number}
-              className="bg-white border rounded-xl p-5 flex items-center justify-between"
+              className="relative bg-white border rounded-xl p-5 flex items-end justify-between"
             >
+              {attemptCounts[
+                practiceSet.number
+              ] > 0 && (
+                  <div className="absolute top-4 right-4 w-9 h-9 rounded-full bg-yellow-400 text-black font-bold flex items-center justify-center shadow-sm">
+                    {
+                      attemptCounts[
+                      practiceSet.number
+                      ]
+                    }
+                  </div>
+                )}
+
               <div>
-                <h2 className="font-bold text-lg" style={{ color: "#f97316" }}>
+                <h2
+                  className="font-bold text-lg"
+                  style={{ color: "#f97316" }}
+                >
                   Set {practiceSet.number}
                 </h2>
+
                 <p className="text-gray-500">
-                  {practiceSet.questionIds.length} Questions
+                  {practiceSet.questionIds.length}{" "}
+                  Questions
                 </p>
+
                 <p className="text-xs text-gray-400 mt-1">
-                  {practiceSet.strategy === "pyq-weighted"
+                  {practiceSet.strategy ===
+                    "pyq-weighted"
                     ? "PYQ weighted"
                     : "Remaining inventory balanced"}
                 </p>
               </div>
 
               <button
-                onClick={() => startSet(practiceSet)}
+                onClick={() =>
+                  startSet(practiceSet)
+                }
                 className="bg-black text-white px-4 py-2 rounded-lg hover:bg-gray-800"
               >
                 Start
