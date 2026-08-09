@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../api/supabase";
 import { generateMixedSets } from "../utils/mixedPracticeGenerator";
@@ -73,6 +73,31 @@ async function fetchQuestionsForTopics(topicIds) {
   return result;
 }
 
+async function fetchRunQuestions(runId) {
+  const result = [];
+  const PAGE_SIZE = 1000;
+
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from("mixed_practice_run_questions")
+      .select("question_id, set_number, position, strategy")
+      .eq("run_id", runId)
+      .order("set_number", { ascending: true })
+      .order("position", { ascending: true })
+      .range(from, from + PAGE_SIZE - 1);
+
+    if (error) throw error;
+
+    result.push(...(data || []));
+
+    if (!data || data.length < PAGE_SIZE) {
+      break;
+    }
+  }
+
+  return result;
+}
+
 function groupRunRows(rows) {
   const grouped = {};
 
@@ -95,6 +120,7 @@ function groupRunRows(rows) {
 
 export default function MixedPracticeSets() {
   const navigate = useNavigate();
+  const loadingRunRef = useRef(false);
 
   const [sets, setSets] = useState([]);
   const [runId, setRunId] = useState(null);
@@ -108,6 +134,10 @@ export default function MixedPracticeSets() {
   }, []);
 
   async function loadCurrentRun() {
+    if (loadingRunRef.current) return;
+
+    loadingRunRef.current = true;
+
     try {
       setLoading(true);
       setError("");
@@ -137,14 +167,7 @@ export default function MixedPracticeSets() {
         return;
       }
 
-      const { data: rows, error: rowsError } = await supabase
-        .from("mixed_practice_run_questions")
-        .select("question_id, set_number, position, strategy")
-        .eq("run_id", run.id)
-        .order("set_number", { ascending: true })
-        .order("position", { ascending: true });
-
-      if (rowsError) throw rowsError;
+      const rows = await fetchRunQuestions(run.id);
 
       setRunId(run.id);
       setTotalQuestions(run.total_questions);
@@ -153,6 +176,7 @@ export default function MixedPracticeSets() {
       console.error(err);
       setError(err.message || "Failed to load mixed practice sets.");
     } finally {
+      loadingRunRef.current = false;
       setLoading(false);
     }
   }
