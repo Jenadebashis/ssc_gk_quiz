@@ -146,6 +146,13 @@ export default function MixedPracticeSets() {
       .eq("mixed_practice_run_id", runId)
       .not("mixed_practice_set_number", "is", null);
 
+    console.log("ATTEMPT COUNT QUERY", {
+      userId,
+      runId,
+      data,
+      error,
+    });
+
     if (error) {
       throw error;
     }
