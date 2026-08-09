@@ -93,14 +93,53 @@ export default function Quiz() {
     }
 
     if (state.mode === "wrong-questions") {
+      // If a specific wrong-question set was selected,
+      // load ONLY those questions.
+      if (
+        Array.isArray(state.questionIds) &&
+        state.questionIds.length > 0
+      ) {
+        const { data, error } = await query
+          .in("id", state.questionIds);
+
+        if (error) {
+          console.error(error);
+          setLoading(false);
+          return;
+        }
+
+        const questionMap = Object.fromEntries(
+          (data || []).map((question) => [
+            question.id,
+            question,
+          ])
+        );
+
+        // Preserve the exact set order.
+        const selectedQuestions =
+          state.questionIds
+            .map((id) => questionMap[id])
+            .filter(Boolean);
+
+        setQuestions(selectedQuestions);
+        setQueue(
+          selectedQuestions.map((q) => q.id)
+        );
+        setLoading(false);
+        return;
+      }
+
+      // Fallback: practice all currently wrong questions.
       const { data, error } = await supabase
-        .from("attempt_answers")
+        .from("question_progress")
         .select(`
-  *,
-  questions(*)
+      question_id,
+      wrong_count,
+      questions (*)
     `)
         .eq("user_id", user.id)
-        .order("answered_at", {
+        .gt("wrong_count", 0)
+        .order("wrong_count", {
           ascending: false,
         });
 
@@ -110,24 +149,14 @@ export default function Quiz() {
         return;
       }
 
-      const latestByQuestion = {};
-
-      data?.forEach((row) => {
-        if (!latestByQuestion[row.question_id]) {
-          latestByQuestion[row.question_id] = row;
-        }
-      });
-
-      const wrongQuestions = Object.values(
-        latestByQuestion
-      )
-        .filter(
-          (row) => !row.is_correct && row.questions
-        )
-        .map((row) => row.questions);
+      const wrongQuestions = (data || [])
+        .map((item) => item.questions)
+        .filter(Boolean);
 
       setQuestions(wrongQuestions);
-      setQueue(wrongQuestions.map((q) => q.id));
+      setQueue(
+        wrongQuestions.map((q) => q.id)
+      );
       setLoading(false);
       return;
     }
@@ -558,14 +587,14 @@ export default function Quiz() {
         {feedback && (
           <div
             className={`mt - 6 rounded - xl border p - 5 ${feedback.type === "correct"
-                ? "bg-green-50 border-green-200"
-                : "bg-red-50 border-red-200"
+              ? "bg-green-50 border-green-200"
+              : "bg-red-50 border-red-200"
               } `}
           >
             <div
               className={`font - bold text - lg ${feedback.type === "correct"
-                  ? "text-green-700"
-                  : "text-red-700"
+                ? "text-green-700"
+                : "text-red-700"
                 } `}
             >
               {feedback.type === "correct"

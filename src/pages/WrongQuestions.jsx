@@ -5,6 +5,8 @@ import { useNavigate } from "react-router-dom";
 export default function WrongQuestions() {
   const [questions, setQuestions] = useState([]);
   const [frequency, setFrequency] = useState("all");
+  const [setSize, setSetSize] = useState(null);
+  const [practiceMode, setPracticeMode] = useState(false);
 
   const navigate = useNavigate();
 
@@ -57,6 +59,36 @@ export default function WrongQuestions() {
           Number(frequency)
       );
 
+  const practiceSets = setSize
+    ? Array.from(
+      {
+        length: Math.ceil(
+          filteredQuestions.length /
+          setSize
+        ),
+      },
+      (_, index) => {
+        const start = index * setSize;
+
+        const end = Math.min(
+          start + setSize,
+          filteredQuestions.length
+        );
+
+        return {
+          number: index + 1,
+          start,
+          end,
+          questions:
+            filteredQuestions.slice(
+              start,
+              end
+            ),
+        };
+      }
+    )
+    : [];
+
   return (
     <div className="max-w-4xl mx-auto p-6">
       {/* Header */}
@@ -66,15 +98,10 @@ export default function WrongQuestions() {
         </h1>
 
         <button
-          onClick={() =>
-            navigate("/quiz", {
-              state: {
-                mode: "wrong-questions",
-                questionCount:
-                  filteredQuestions.length,
-              },
-            })
-          }
+          onClick={() => {
+            setPracticeMode(true);
+            setSetSize(null);
+          }}
           disabled={
             filteredQuestions.length === 0
           }
@@ -86,7 +113,7 @@ export default function WrongQuestions() {
 
       {/* Frequency Filter */}
       <div className="bg-white border rounded-xl p-4 mb-6">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           <label
             htmlFor="frequency"
             className="font-semibold"
@@ -97,9 +124,11 @@ export default function WrongQuestions() {
           <select
             id="frequency"
             value={frequency}
-            onChange={(e) =>
-              setFrequency(e.target.value)
-            }
+            onChange={(e) => {
+              setFrequency(e.target.value);
+              setPracticeMode(false);
+              setSetSize(null);
+            }}
             className="
               border
               rounded-lg
@@ -116,7 +145,9 @@ export default function WrongQuestions() {
             </option>
 
             {Array.from(
-              { length: maxFrequency },
+              {
+                length: maxFrequency,
+              },
               (_, index) => index + 1
             ).map((count) => (
               <option
@@ -138,10 +169,139 @@ export default function WrongQuestions() {
         </div>
       </div>
 
-      {/* Questions */}
+      {/* Practice Setup */}
+      {practiceMode &&
+        setSize === null &&
+        filteredQuestions.length > 0 && (
+          <div className="bg-white border rounded-xl p-5 mb-6">
+            <h3 className="font-semibold text-lg mb-3">
+              Select Questions Per Set
+            </h3>
+
+            <div className="flex gap-3 flex-wrap">
+              {[10, 20, 30, 40].map(
+                (size) => (
+                  <button
+                    key={size}
+                    onClick={() =>
+                      setSetSize(size)
+                    }
+                    className="
+                      px-5
+                      py-3
+                      rounded-xl
+                      border
+                      bg-yellow-50
+                      border-yellow-300
+                      font-semibold
+                      hover:bg-yellow-100
+                    "
+                  >
+                    {size}
+                  </button>
+                )
+              )}
+            </div>
+
+            <p className="text-sm text-gray-500 mt-3">
+              {filteredQuestions.length}{" "}
+              questions →{" "}
+              {Math.ceil(
+                filteredQuestions.length / 10
+              )}{" "}
+              to{" "}
+              {Math.ceil(
+                filteredQuestions.length / 40
+              )}{" "}
+              possible sets
+            </p>
+          </div>
+        )}
+
+      {/* Set Selector */}
+      {practiceMode && setSize !== null && (
+        <div className="bg-white border rounded-xl p-5 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="font-semibold text-lg">
+                Select Set
+              </h3>
+
+              <p className="text-sm text-gray-500">
+                {filteredQuestions.length}{" "}
+                questions ·{" "}
+                {practiceSets.length} sets ·{" "}
+                {setSize} per set
+              </p>
+            </div>
+
+            <button
+              onClick={() => setSetSize(null)}
+              className="text-sm text-gray-500 hover:text-black"
+            >
+              Change Size
+            </button>
+          </div>
+
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {practiceSets.map(
+              (practiceSet) => (
+                <button
+                  key={practiceSet.number}
+                  onClick={() => {
+                    navigate("/quiz", {
+                      state: {
+                        mode: "wrong-questions",
+                        questionIds:
+                          practiceSet.questions.map(
+                            (item) =>
+                              item.question_id
+                          ),
+                        questionCount:
+                          practiceSet.questions
+                            .length,
+                      },
+                    });
+                  }}
+                  className="
+                    text-left
+                    border
+                    rounded-xl
+                    p-4
+                    hover:border-yellow-400
+                    hover:bg-yellow-50
+                    transition
+                  "
+                >
+                  <div className="font-bold">
+                    Set {practiceSet.number}
+                  </div>
+
+                  <div className="text-sm text-gray-500 mt-1">
+                    Questions{" "}
+                    {practiceSet.start + 1}–
+                    {practiceSet.end}
+                  </div>
+
+                  <div className="text-sm font-medium mt-2">
+                    {
+                      practiceSet.questions
+                        .length
+                    }{" "}
+                    Questions
+                  </div>
+                </button>
+              )
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Wrong Questions */}
       {filteredQuestions.length === 0 ? (
         <p className="text-gray-600">
-          No questions found for this frequency.
+          No questions found for this
+          frequency.
         </p>
       ) : (
         <div className="space-y-5">
@@ -161,7 +321,11 @@ export default function WrongQuestions() {
                   <span className="font-medium">
                     Correct Answer:
                   </span>{" "}
-                  {q.options[q.correct_answer]}
+                  {
+                    q.options[
+                    q.correct_answer
+                    ]
+                  }
                 </p>
 
                 {q.explanation && (
