@@ -55,7 +55,7 @@ export default function Quiz() {
         return;
       }
 
-      const { data: setQuestions, error } = await query
+      const { data: setQuestionRows, error } = await query
         .in("id", state.questionIds);
 
       if (error) {
@@ -65,9 +65,11 @@ export default function Quiz() {
       }
 
       const questionMap = Object.fromEntries(
-        (setQuestions || []).map((question) => [question.id, question])
+        (setQuestionRows || []).map((question) => [
+          question.id,
+          question,
+        ])
       );
-
       // Supabase does not guarantee the order of an IN query, so restore
       // the permanent random order saved by the practice-set page.
       const orderedQuestions = state.questionIds
@@ -351,12 +353,12 @@ export default function Quiz() {
       <div className="text-sm text-gray-500 mb-4">
         {isWrong
           ? `This question will return after ${Math.min(
-              retryDelay,
-              Math.max(1, queue.length - 1)
-            )} other question${Math.min(
-              retryDelay,
-              Math.max(1, queue.length - 1)
-            ) !== 1 ? "s" : ""}.`
+            retryDelay,
+            Math.max(1, queue.length - 1)
+          )} other question${Math.min(
+            retryDelay,
+            Math.max(1, queue.length - 1)
+          ) !== 1 ? "s" : ""}.`
           : "Active recall: answer from memory before revealing the options."}
       </div>
 
@@ -410,11 +412,10 @@ export default function Quiz() {
                     key={index}
                     onClick={() => selectAnswer(index)}
                     disabled={Boolean(feedback)}
-                    className={`w-full text-left rounded-xl p-4 border transition-all duration-200 flex items-center justify-between ${optionClass} ${
-                      feedback
-                        ? "cursor-default"
-                        : "cursor-pointer"
-                    }`}
+                    className={`w-full text-left rounded-xl p-4 border transition-all duration-200 flex items-center justify-between ${optionClass} ${feedback
+                      ? "cursor-default"
+                      : "cursor-pointer"
+                      }`}
                   >
                     <div className="flex items-center gap-3">
                       <div
@@ -451,18 +452,16 @@ export default function Quiz() {
 
         {feedback && (
           <div
-            className={`mt-6 rounded-xl border p-5 ${
-              feedback.type === "correct"
-                ? "bg-green-50 border-green-200"
-                : "bg-red-50 border-red-200"
-            }`}
+            className={`mt-6 rounded-xl border p-5 ${feedback.type === "correct"
+              ? "bg-green-50 border-green-200"
+              : "bg-red-50 border-red-200"
+              }`}
           >
             <div
-              className={`font-bold text-lg ${
-                feedback.type === "correct"
-                  ? "text-green-700"
-                  : "text-red-700"
-              }`}
+              className={`font-bold text-lg ${feedback.type === "correct"
+                ? "text-green-700"
+                : "text-red-700"
+                }`}
             >
               {feedback.type === "correct"
                 ? "✓ Correct"

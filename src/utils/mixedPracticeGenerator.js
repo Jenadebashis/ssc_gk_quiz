@@ -10,14 +10,7 @@ export const SUBJECT_CONFIG = [
   {
     key: "Programming",
     weight: 7,
-    topicNames: [
-      "Programming",
-      "Programming Concepts",
-      "C Programming",
-      "C",
-      "Java",
-      "Python",
-    ],
+    topicNames: ["Programming Concepts"],
   },
   {
     key: "DBMS",
@@ -27,73 +20,57 @@ export const SUBJECT_CONFIG = [
   {
     key: "Cyber Security",
     weight: 5,
-    topicNames: [
-      "Cyber Security",
-      "Cybersecurity",
-      "Cyber Security & Cybercrime",
-    ],
+    topicNames: ["Cyber Security"],
   },
   {
     key: "DSA",
     weight: 5,
-    topicNames: [
-      "DSA",
-      "Data Structures",
-      "Data Structures and Algorithms",
-      "Algorithms",
-    ],
+    topicNames: ["DS & ALGO"],
   },
   {
     key: "OS",
     weight: 4,
-    topicNames: ["OS", "Operating System", "Operating Systems"],
+    topicNames: ["Operating System"],
   },
   {
     key: "SE",
     weight: 3,
-    topicNames: ["SE", "Software Engineering"],
+    topicNames: ["Software Engineering"],
   },
   {
     key: "Cloud",
     weight: 3,
-    topicNames: ["Cloud", "Cloud Computing"],
+    topicNames: ["Cloud Computing"],
   },
   {
     key: "COA",
     weight: 2,
-    topicNames: ["COA", "Computer Organization and Architecture"],
+    topicNames: [
+      "Computer Organisation & Architecture",
+    ],
   },
   {
     key: "Web",
     weight: 2,
-    topicNames: [
-      "Web",
-      "Web Tech",
-      "Web Technology",
-      "Web Technologies",
-    ],
+    topicNames: ["Web Technology"],
   },
   {
     key: "UNIX",
     weight: 2,
-    topicNames: ["UNIX", "Unix"],
+    topicNames: [
+      "UNIX & Shell Scripting",
+    ],
   },
   {
     key: "Banking IT",
     weight: 2,
-    topicNames: [
-      "Banking IT",
-      "Banking Technology",
-      "Banking Technology IT",
-    ],
+    topicNames: ["Banking IT"],
   },
   {
     key: "Misc",
     weight: 2,
     topicNames: [
-      "Misc",
-      "Miscellaneous",
-      "Miscellaneous IT",
+      "Miscellenous topic",
     ],
   },
 ];
