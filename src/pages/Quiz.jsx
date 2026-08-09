@@ -2,7 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "../api/supabase";
 import { saveAttempt } from "../api/attempt";
-import { incrementWrongCount } from "../api/questionProgress";
+import {
+  incrementWrongCount,
+  getWrongCount,
+  decrementWrongCount,
+} from "../api/questionProgress";
 import { selectQuestions } from "../utils/questionSelectior";
 
 function getRetryDelay(totalQuestions) {
@@ -23,6 +27,7 @@ export default function Quiz() {
 
   const [showOptions, setShowOptions] = useState(false);
   const [feedback, setFeedback] = useState(null);
+  const [reducePrompt, setReducePrompt] = useState(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
@@ -50,7 +55,10 @@ export default function Quiz() {
       .select("*");
 
     if (state.mode === "set") {
-      if (!Array.isArray(state.questionIds) || !state.questionIds.length) {
+      if (
+        !Array.isArray(state.questionIds) ||
+        !state.questionIds.length
+      ) {
         setQuestions([]);
         setLoading(false);
         return;
@@ -71,6 +79,7 @@ export default function Quiz() {
           question,
         ])
       );
+
       // Supabase does not guarantee the order of an IN query, so restore
       // the permanent random order saved by the practice-set page.
       const orderedQuestions = state.questionIds
@@ -87,9 +96,9 @@ export default function Quiz() {
       const { data, error } = await supabase
         .from("attempt_answers")
         .select(`
-          *,
-          questions(*)
-        `)
+  *,
+  questions(*)
+    `)
         .eq("user_id", user.id)
         .order("answered_at", {
           ascending: false,
@@ -112,7 +121,9 @@ export default function Quiz() {
       const wrongQuestions = Object.values(
         latestByQuestion
       )
-        .filter((row) => !row.is_correct && row.questions)
+        .filter(
+          (row) => !row.is_correct && row.questions
+        )
         .map((row) => row.questions);
 
       setQuestions(wrongQuestions);
@@ -126,7 +137,10 @@ export default function Quiz() {
     }
 
     if (state.mode === "subtopic") {
-      query = query.eq("subtopic_id", state.subtopicId);
+      query = query.eq(
+        "subtopic_id",
+        state.subtopicId
+      );
     }
 
     const {
@@ -176,17 +190,24 @@ export default function Quiz() {
 
   const questionMap = useMemo(() => {
     return Object.fromEntries(
-      questions.map((question) => [question.id, question])
+      questions.map((question) => [
+        question.id,
+        question,
+      ])
     );
   }, [questions]);
 
   const currentQuestion =
-    queue.length > 0 ? questionMap[queue[0]] : null;
+    queue.length > 0
+      ? questionMap[queue[0]]
+      : null;
 
   const masteredCount =
     questions.length - queue.length;
 
-  const retryDelay = getRetryDelay(questions.length);
+  const retryDelay = getRetryDelay(
+    questions.length
+  );
 
   function showQuestionOptions() {
     setShowOptions(true);
@@ -207,10 +228,38 @@ export default function Quiz() {
     }));
 
     if (isCorrect) {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      let wrongCount = 0;
+
+      if (user) {
+        try {
+          wrongCount = await getWrongCount({
+            userId: user.id,
+            questionId: currentQuestion.id,
+          });
+        } catch (error) {
+          console.error(
+            "Failed to get wrong count:",
+            error
+          );
+        }
+      }
+
       setFeedback({
         type: "correct",
         selectedAnswer: index,
       });
+
+      if (wrongCount > 0) {
+        setReducePrompt({
+          questionId: currentQuestion.id,
+          wrongCount,
+        });
+      }
+
       return;
     }
 
@@ -225,17 +274,24 @@ export default function Quiz() {
     } = await supabase.auth.getUser();
 
     if (user) {
-      console.log("WRONG ANSWER - updating progress", {
-        userId: user.id,
-        questionId: currentQuestion.id,
-      });
+      console.log(
+        "WRONG ANSWER - updating progress",
+        {
+          userId: user.id,
+          questionId: currentQuestion.id,
+        }
+      );
+
       try {
         const count = await incrementWrongCount({
           userId: user.id,
           questionId: currentQuestion.id,
         });
 
-        console.log("WRONG COUNT UPDATED:", count);
+        console.log(
+          "WRONG COUNT UPDATED:",
+          count
+        );
       } catch (error) {
         console.error(
           "Failed to update wrong count:",
@@ -263,6 +319,7 @@ export default function Quiz() {
         return;
       }
 
+      setReducePrompt(null);
       setQueue(remaining);
       setShowOptions(false);
       setFeedback(null);
@@ -280,6 +337,7 @@ export default function Quiz() {
       ...remaining.slice(delay),
     ];
 
+    setReducePrompt(null);
     setQueue(nextQueue);
     setShowOptions(false);
     setFeedback(null);
@@ -308,8 +366,10 @@ export default function Quiz() {
         quizInfo: state,
         questions,
         answers,
-        mixedPracticeRunId: state.mixedPracticeRunId || null,
-        mixedPracticeSetNumber: state.setNumber || null,
+        mixedPracticeRunId:
+          state.mixedPracticeRunId || null,
+        mixedPracticeSetNumber:
+          state.setNumber || null,
       });
 
       navigate("/results", {
@@ -351,6 +411,7 @@ export default function Quiz() {
           <h2 className="text-2xl font-bold mb-2">
             Quiz Complete
           </h2>
+
           <p className="text-gray-600">
             All questions have been answered correctly.
           </p>
@@ -369,11 +430,13 @@ export default function Quiz() {
     <div className="max-w-4xl mx-auto p-6">
       <div className="flex items-center justify-between mb-2">
         <h2 className="text-xl font-bold">
-          Mastered {masteredCount} / {questions.length}
+          Mastered {masteredCount} /{" "}
+          {questions.length}
         </h2>
 
         <span className="text-sm text-gray-500">
-          {queue.length} question{queue.length !== 1 ? "s" : ""} remaining
+          {queue.length} question
+          {queue.length !== 1 ? "s" : ""} remaining
         </span>
       </div>
 
@@ -382,10 +445,14 @@ export default function Quiz() {
           ? `This question will return after ${Math.min(
             retryDelay,
             Math.max(1, queue.length - 1)
-          )} other question${Math.min(
+          )
+          } other question${Math.min(
             retryDelay,
             Math.max(1, queue.length - 1)
-          ) !== 1 ? "s" : ""}.`
+          ) !== 1
+            ? "s"
+            : ""
+          }.`
           : "Active recall: answer from memory before revealing the options."}
       </div>
 
@@ -409,11 +476,14 @@ export default function Quiz() {
               (option, index) => {
                 const isSelected =
                   selectedAnswer === index;
+
                 const isCorrectOption =
-                  index === currentQuestion.correct_answer;
+                  index ===
+                  currentQuestion.correct_answer;
 
                 let optionClass =
                   "bg-white border-gray-300 hover:bg-gray-50";
+
                 let badgeClass =
                   "bg-gray-100 text-gray-700";
 
@@ -421,11 +491,16 @@ export default function Quiz() {
                   if (isCorrectOption) {
                     optionClass =
                       "bg-green-50 border-green-500 text-green-800";
+
                     badgeClass =
                       "bg-green-500 text-white";
-                  } else if (isSelected && isWrong) {
+                  } else if (
+                    isSelected &&
+                    isWrong
+                  ) {
                     optionClass =
                       "bg-red-50 border-red-500 text-red-800";
+
                     badgeClass =
                       "bg-red-500 text-white";
                   } else {
@@ -437,16 +512,19 @@ export default function Quiz() {
                 return (
                   <button
                     key={index}
-                    onClick={() => selectAnswer(index)}
+                    onClick={() =>
+                      selectAnswer(index)
+                    }
                     disabled={Boolean(feedback)}
-                    className={`w-full text-left rounded-xl p-4 border transition-all duration-200 flex items-center justify-between ${optionClass} ${feedback
-                      ? "cursor-default"
-                      : "cursor-pointer"
-                      }`}
+                    className={`w - full text - left rounded - xl p - 4 border transition - all duration - 200 flex items - center justify - between ${optionClass
+                      } ${feedback
+                        ? "cursor-default"
+                        : "cursor-pointer"
+                      } `}
                   >
                     <div className="flex items-center gap-3">
                       <div
-                        className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${badgeClass}`}
+                        className={`w - 8 h - 8 rounded - full flex items - center justify - center font - bold ${badgeClass} `}
                       >
                         {String.fromCharCode(
                           65 + index
@@ -479,16 +557,16 @@ export default function Quiz() {
 
         {feedback && (
           <div
-            className={`mt-6 rounded-xl border p-5 ${feedback.type === "correct"
-              ? "bg-green-50 border-green-200"
-              : "bg-red-50 border-red-200"
-              }`}
+            className={`mt - 6 rounded - xl border p - 5 ${feedback.type === "correct"
+                ? "bg-green-50 border-green-200"
+                : "bg-red-50 border-red-200"
+              } `}
           >
             <div
-              className={`font-bold text-lg ${feedback.type === "correct"
-                ? "text-green-700"
-                : "text-red-700"
-                }`}
+              className={`font - bold text - lg ${feedback.type === "correct"
+                  ? "text-green-700"
+                  : "text-red-700"
+                } `}
             >
               {feedback.type === "correct"
                 ? "✓ Correct"
@@ -498,7 +576,12 @@ export default function Quiz() {
             {feedback.type === "wrong" && (
               <>
                 <p className="mt-3 font-medium">
-                  Correct Answer: {currentQuestion.options[currentQuestion.correct_answer]}
+                  Correct Answer:{" "}
+                  {
+                    currentQuestion.options[
+                    currentQuestion.correct_answer
+                    ]
+                  }
                 </p>
 
                 {currentQuestion.explanation && (
@@ -511,10 +594,71 @@ export default function Quiz() {
                 )}
 
                 <p className="mt-4 text-sm text-red-700">
-                  You will see this question again after a few other questions.
+                  You will see this question again
+                  after a few other questions.
                 </p>
               </>
             )}
+          </div>
+        )}
+
+        {reducePrompt && (
+          <div className="mt-4 rounded-xl border border-yellow-300 bg-yellow-50 p-5">
+            <p className="font-semibold text-yellow-900">
+              You got this question right.
+            </p>
+
+            <p className="mt-1 text-yellow-800">
+              Reduce wrong count from{" "}
+              <strong>
+                {reducePrompt.wrongCount}
+              </strong>{" "}
+              to{" "}
+              <strong>
+                {reducePrompt.wrongCount - 1}
+              </strong>
+              ?
+            </p>
+
+            <div className="flex gap-3 mt-4">
+              <button
+                onClick={() =>
+                  setReducePrompt(null)
+                }
+                className="px-4 py-2 rounded-lg border bg-white hover:bg-gray-50"
+              >
+                Keep {reducePrompt.wrongCount}
+              </button>
+
+              <button
+                onClick={async () => {
+                  const {
+                    data: { user },
+                  } = await supabase.auth.getUser();
+
+                  if (!user) return;
+
+                  try {
+                    await decrementWrongCount({
+                      userId: user.id,
+                      questionId:
+                        reducePrompt.questionId,
+                    });
+
+                    setReducePrompt(null);
+                  } catch (error) {
+                    console.error(
+                      "Failed to reduce wrong count:",
+                      error
+                    );
+                  }
+                }}
+                className="px-4 py-2 rounded-lg bg-yellow-500 text-white hover:bg-yellow-600"
+              >
+                Reduce to{" "}
+                {reducePrompt.wrongCount - 1}
+              </button>
+            </div>
           </div>
         )}
       </div>

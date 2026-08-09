@@ -48,3 +48,57 @@ export async function incrementWrongCount({
 
   return newCount;
 }
+
+export async function getWrongCount({
+  userId,
+  questionId,
+}) {
+  const { data, error } = await supabase
+    .from("question_progress")
+    .select("wrong_count")
+    .eq("user_id", userId)
+    .eq("question_id", questionId)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return data?.wrong_count || 0;
+}
+
+export async function decrementWrongCount({
+  userId,
+  questionId,
+}) {
+  const { data, error } = await supabase
+    .from("question_progress")
+    .select("id, wrong_count")
+    .eq("user_id", userId)
+    .eq("question_id", questionId)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  if (!data || data.wrong_count <= 0) {
+    return 0;
+  }
+
+  const newCount = data.wrong_count - 1;
+
+  const { error: updateError } = await supabase
+    .from("question_progress")
+    .update({
+      wrong_count: newCount,
+      updated_at: new Date(),
+    })
+    .eq("id", data.id);
+
+  if (updateError) {
+    throw updateError;
+  }
+
+  return newCount;
+}
