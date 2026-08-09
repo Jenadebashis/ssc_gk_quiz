@@ -18,45 +18,45 @@ export default function Home() {
   const navigate = useNavigate();
 
   async function loadTopics() {
-    const { data: topicsData } = await supabase
-      .from("topics")
-      .select("*")
-      .order("name");
+    const { data: topicsData, error: topicsError } =
+      await supabase
+        .from("topics")
+        .select("*")
+        .order("name");
 
-    const questionsData = [];
-    const PAGE_SIZE = 1000;
-
-    for (let from = 0; ; from += PAGE_SIZE) {
-      const { data, error } = await supabase
-        .from("questions")
-        .select("topic_id")
-        .range(from, from + PAGE_SIZE - 1);
-
-      if (error) {
-        console.error(error);
-        break;
-      }
-
-      questionsData.push(...(data || []));
-
-      if (!data || data.length < PAGE_SIZE) {
-        break;
-      }
+    if (topicsError) {
+      console.error(topicsError);
+      return;
     }
 
-    const counts = {};
+    const finalTopics = await Promise.all(
+      (topicsData || []).map(async (topic) => {
+        const { count, error } = await supabase
+          .from("questions")
+          .select("id", {
+            count: "exact",
+            head: true,
+          })
+          .eq("topic_id", topic.id);
 
-    questionsData.forEach((q) => {
-      counts[q.topic_id] =
-        (counts[q.topic_id] || 0) + 1;
-    });
+        if (error) {
+          console.error(
+            `Failed to count questions for ${topic.name}:`,
+            error
+          );
 
-    const finalTopics =
-      topicsData?.map((topic) => ({
-        ...topic,
-        questionCount:
-          counts[topic.id] || 0,
-      })) || [];
+          return {
+            ...topic,
+            questionCount: 0,
+          };
+        }
+
+        return {
+          ...topic,
+          questionCount: count || 0,
+        };
+      })
+    );
 
     setTopics(finalTopics);
   }
