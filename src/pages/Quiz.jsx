@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "../api/supabase";
 import { saveAttempt } from "../api/attempt";
+import { incrementWrongCount } from "../api/questionProgress";
 import { selectQuestions } from "../utils/questionSelectior";
 
 function getRetryDelay(totalQuestions) {
@@ -192,7 +193,7 @@ export default function Quiz() {
     setFeedback(null);
   }
 
-  function selectAnswer(index) {
+  async function selectAnswer(index) {
     if (!currentQuestion || feedback) {
       return;
     }
@@ -218,6 +219,30 @@ export default function Quiz() {
       [currentQuestion.id]:
         (prev[currentQuestion.id] || 0) + 1,
     }));
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (user) {
+      console.log("WRONG ANSWER - updating progress", {
+        userId: user.id,
+        questionId: currentQuestion.id,
+      });
+      try {
+        const count = await incrementWrongCount({
+          userId: user.id,
+          questionId: currentQuestion.id,
+        });
+
+        console.log("WRONG COUNT UPDATED:", count);
+      } catch (error) {
+        console.error(
+          "Failed to update wrong count:",
+          error
+        );
+      }
+    }
 
     setFeedback({
       type: "wrong",
