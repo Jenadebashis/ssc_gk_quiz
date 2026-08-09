@@ -7,6 +7,7 @@ import Topics from "../admin/Topics";
 import Subtopics from "../admin/Subtopics";
 import UploadQuestions from "../admin/UploadQuestions";
 import TopicDetails from "../pages/TopicDetails";
+import TopicSets from "../pages/TopicSets";
 import QuizSetup from "../pages/QuizSetup";
 import Quiz from "../pages/Quiz";
 import Results from "../pages/Results";
@@ -22,50 +23,95 @@ export default function AppRoutes() {
     <Routes>
       <Route path="/" element={<Home />} />
 
-      <Route path="/admin" element={<AdminGuard><Dashboard /></AdminGuard>} />
-      <Route path="/admin/topics" element={<AdminGuard><Topics /></AdminGuard>} />
-      <Route path="/admin/subtopics" element={<AdminGuard><Subtopics /></AdminGuard>} />
-      < Route path="/admin/upload" element={<AdminGuard>< UploadQuestions /></AdminGuard>} />
-      < Route
-        path="/topic/:topicId"
-        element={< TopicDetails />}
-      />
-      < Route
-        path="/quiz-setup"
-        element={< QuizSetup />}
-      />
-      < Route
-        path="/quiz"
-        element={< Quiz />}
-      />
-      < Route
-        path="/results"
-        element={< Results />}
-      />
-      < Route
-        path="/login"
-        element={< Login />}
-      />
-      < Route
-        path="/history"
-        element={< History />}
-      />
-      < Route
-        path="/wrong-questions"
-        element={< WrongQuestions />}
-      />
-      < Route
-        path="/admin/questions"
+      <Route
+        path="/admin"
         element={
-          < AdminGuard >
-            <Questions />
-          </AdminGuard >
+          <AdminGuard>
+            <Dashboard />
+          </AdminGuard>
         }
       />
+
+      <Route
+        path="/admin/topics"
+        element={
+          <AdminGuard>
+            <Topics />
+          </AdminGuard>
+        }
+      />
+
+      <Route
+        path="/admin/subtopics"
+        element={
+          <AdminGuard>
+            <Subtopics />
+          </AdminGuard>
+        }
+      />
+
+      <Route
+        path="/admin/upload"
+        element={
+          <AdminGuard>
+            <UploadQuestions />
+          </AdminGuard>
+        }
+      />
+
+      <Route
+        path="/topic/:topicId"
+        element={<TopicDetails />}
+      />
+
+      <Route
+        path="/topic/:topicId/sets"
+        element={<TopicSets />}
+      />
+
+      <Route
+        path="/quiz-setup"
+        element={<QuizSetup />}
+      />
+
+      <Route
+        path="/quiz"
+        element={<Quiz />}
+      />
+
+      <Route
+        path="/results"
+        element={<Results />}
+      />
+
+      <Route
+        path="/login"
+        element={<Login />}
+      />
+
+      <Route
+        path="/history"
+        element={<History />}
+      />
+
+      <Route
+        path="/wrong-questions"
+        element={<WrongQuestions />}
+      />
+
+      <Route
+        path="/admin/questions"
+        element={
+          <AdminGuard>
+            <Questions />
+          </AdminGuard>
+        }
+      />
+
       <Route
         path="/attempt/:attemptId"
         element={<AttemptReview />}
       />
-    </Routes >
+    </Routes>
   );
 }

@@ -25,27 +25,34 @@ export default function TopicDetails() {
       .eq("topic_id", topicId)
       .order("name");
 
-    const { data: questionData } = await supabase
+    const { count: totalCount, error: totalError } = await supabase
       .from("questions")
-      .select("id,subtopic_id")
+      .select("id", { count: "exact", head: true })
       .eq("topic_id", topicId);
 
-    const countMap = {};
+    if (totalError) {
+      console.error(totalError);
+    }
 
-    questionData?.forEach((q) => {
-      countMap[q.subtopic_id] =
-        (countMap[q.subtopic_id] || 0) + 1;
-    });
+    const enrichedSubtopics = await Promise.all(
+      (subtopicData || []).map(async (s) => {
+        const { count, error } = await supabase
+          .from("questions")
+          .select("id", { count: "exact", head: true })
+          .eq("topic_id", topicId)
+          .eq("subtopic_id", s.id);
 
-    const enrichedSubtopics =
-      subtopicData?.map((s) => ({
-        ...s,
-        questionCount:
-          countMap[s.id] || 0,
-      })) || [];
+        if (error) console.error(error);
+
+        return {
+          ...s,
+          questionCount: count || 0,
+        };
+      })
+    );
 
     setSubtopics(enrichedSubtopics);
-    setTotalQuestions(questionData?.length || 0);
+    setTotalQuestions(totalCount || 0);
   }
 
   useEffect(() => {
@@ -57,7 +64,6 @@ export default function TopicDetails() {
   return (
     <div className="min-h-screen bg-slate-50">
       <div className="max-w-5xl mx-auto p-8">
-
         <h1 className="text-4xl font-bold">
           {topic.name}
         </h1>
@@ -79,6 +85,13 @@ export default function TopicDetails() {
           }
         >
           Practice Entire Topic
+        </button>
+
+        <button
+          className="mt-3 px-5 py-3 bg-white text-black border border-gray-300 rounded-lg hover:bg-gray-100"
+          onClick={() => navigate(`/topic/${topicId}/sets`)}
+        >
+          Practice in Sets of 30
         </button>
 
         <h2 className="text-2xl font-semibold mt-10 mb-4">
@@ -112,7 +125,6 @@ export default function TopicDetails() {
             </div>
           ))}
         </div>
-
       </div>
     </div>
   );
