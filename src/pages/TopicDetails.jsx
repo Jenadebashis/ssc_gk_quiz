@@ -34,22 +34,23 @@ export default function TopicDetails() {
       console.error(totalError);
     }
 
-    const enrichedSubtopics = await Promise.all(
-      (subtopicData || []).map(async (s) => {
-        const { count, error } = await supabase
-          .from("questions")
-          .select("id", { count: "exact", head: true })
-          .eq("topic_id", topicId)
-          .eq("subtopic_id", s.id);
+    const enrichedSubtopics =
+      await Promise.all(
+        (subtopicData || []).map(async (s) => {
+          const { count, error } = await supabase
+            .from("questions")
+            .select("id", { count: "exact", head: true })
+            .eq("topic_id", topicId)
+            .eq("subtopic_id", s.id);
 
-        if (error) console.error(error);
+          if (error) console.error(error);
 
-        return {
-          ...s,
-          questionCount: count || 0,
-        };
-      })
-    );
+          return {
+            ...s,
+            questionCount: count || 0,
+          };
+        })
+      );
 
     setSubtopics(enrichedSubtopics);
     setTotalQuestions(totalCount || 0);
@@ -64,6 +65,7 @@ export default function TopicDetails() {
   return (
     <div className="min-h-screen bg-slate-50">
       <div className="max-w-5xl mx-auto p-8">
+
         <h1 className="text-4xl font-bold">
           {topic.name}
         </h1>
@@ -125,6 +127,7 @@ export default function TopicDetails() {
             </div>
           ))}
         </div>
+
       </div>
     </div>
   );

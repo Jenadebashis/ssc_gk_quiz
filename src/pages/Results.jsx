@@ -26,7 +26,6 @@ export default function Results() {
 
   const total = questions.length;
   const wrong = total - correct;
-
   const totalMistakes = Object.values(mistakeCounts).reduce(
     (sum, count) => sum + count,
     0
@@ -71,20 +70,22 @@ export default function Results() {
       <div className="flex gap-3 mb-6">
         <button
           onClick={() => setShowIncorrectOnly(false)}
-          className={`px-4 py-2 rounded ${!showIncorrectOnly
+          className={`px-4 py-2 rounded ${
+            !showIncorrectOnly
               ? "bg-black text-white"
               : "border"
-            }`}
+          }`}
         >
           All Questions
         </button>
 
         <button
           onClick={() => setShowIncorrectOnly(true)}
-          className={`px-4 py-2 rounded ${showIncorrectOnly
+          className={`px-4 py-2 rounded ${
+            showIncorrectOnly
               ? "bg-black text-white"
               : "border"
-            }`}
+          }`}
         >
           Questions With Mistakes ({questionsWithMistakes})
         </button>
@@ -115,19 +116,19 @@ export default function Results() {
                 </h3>
 
                 <p>
-                  Final Answer:{" "}
+                  Final Answer: {" "}
                   {userAnswer !== undefined
                     ? q.options[userAnswer]
                     : "Not Answered"}
                 </p>
 
                 <p>
-                  Correct Answer:{" "}
+                  Correct Answer: {" "}
                   {q.options[q.correct_answer]}
                 </p>
 
                 <p>
-                  Status:{" "}
+                  Status: {" "}
                   {isCorrect
                     ? "✅ Mastered"
                     : "❌ Unresolved"}

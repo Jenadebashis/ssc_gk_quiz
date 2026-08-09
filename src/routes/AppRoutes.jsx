@@ -8,6 +8,7 @@ import Subtopics from "../admin/Subtopics";
 import UploadQuestions from "../admin/UploadQuestions";
 import TopicDetails from "../pages/TopicDetails";
 import TopicSets from "../pages/TopicSets";
+import MixedPracticeSets from "../pages/MixedPracticeSets";
 import QuizSetup from "../pages/QuizSetup";
 import Quiz from "../pages/Quiz";
 import Results from "../pages/Results";
@@ -23,95 +24,58 @@ export default function AppRoutes() {
     <Routes>
       <Route path="/" element={<Home />} />
 
-      <Route
-        path="/admin"
-        element={
-          <AdminGuard>
-            <Dashboard />
-          </AdminGuard>
-        }
-      />
-
-      <Route
-        path="/admin/topics"
-        element={
-          <AdminGuard>
-            <Topics />
-          </AdminGuard>
-        }
-      />
-
-      <Route
-        path="/admin/subtopics"
-        element={
-          <AdminGuard>
-            <Subtopics />
-          </AdminGuard>
-        }
-      />
-
-      <Route
-        path="/admin/upload"
-        element={
-          <AdminGuard>
-            <UploadQuestions />
-          </AdminGuard>
-        }
-      />
-
-      <Route
+      <Route path="/admin" element={<AdminGuard><Dashboard /></AdminGuard>} />
+      <Route path="/admin/topics" element={<AdminGuard><Topics /></AdminGuard>} />
+      <Route path="/admin/subtopics" element={<AdminGuard><Subtopics /></AdminGuard>} />
+      < Route path="/admin/upload" element={<AdminGuard>< UploadQuestions /></AdminGuard>} />
+      < Route
         path="/topic/:topicId"
-        element={<TopicDetails />}
+        element={< TopicDetails />}
       />
-
-      <Route
+      < Route
         path="/topic/:topicId/sets"
-        element={<TopicSets />}
+        element={< TopicSets />}
       />
-
-      <Route
+      < Route
+        path="/mixed-practice-sets"
+        element={< MixedPracticeSets />}
+      />
+      < Route
         path="/quiz-setup"
-        element={<QuizSetup />}
+        element={< QuizSetup />}
       />
-
-      <Route
+      < Route
         path="/quiz"
-        element={<Quiz />}
+        element={< Quiz />}
       />
-
-      <Route
+      < Route
         path="/results"
-        element={<Results />}
+        element={< Results />}
       />
-
-      <Route
+      < Route
         path="/login"
-        element={<Login />}
+        element={< Login />}
       />
-
-      <Route
+      < Route
         path="/history"
-        element={<History />}
+        element={< History />}
       />
-
-      <Route
+      < Route
         path="/wrong-questions"
-        element={<WrongQuestions />}
+        element={< WrongQuestions />}
       />
-
-      <Route
+      < Route
         path="/admin/questions"
         element={
-          <AdminGuard>
+          < AdminGuard >
             <Questions />
-          </AdminGuard>
+          </AdminGuard >
         }
       />
-
       <Route
         path="/attempt/:attemptId"
         element={<AttemptReview />}
       />
-    </Routes>
+    </Routes >
   );
 }

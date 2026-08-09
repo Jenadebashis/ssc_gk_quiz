@@ -20,37 +20,28 @@ export default function Home() {
   const navigate = useNavigate();
 
   async function loadTopics() {
-    const { data: topicsData, error: topicsError } = await supabase
+    const { data: topicsData } = await supabase
       .from("topics")
       .select("*")
       .order("name");
 
-    if (topicsError) {
-      console.error(topicsError);
-      return;
-    }
+    const { data: questionsData } = await supabase
+      .from("questions")
+      .select("topic_id");
 
-    const finalTopics = await Promise.all(
-      (topicsData || []).map(async (topic) => {
-        const { count, error } = await supabase
-          .from("questions")
-          .select("id", { count: "exact", head: true })
-          .eq("topic_id", topic.id);
+    const counts = {};
 
-        if (error) {
-          console.error(error);
-          return {
-            ...topic,
-            questionCount: 0,
-          };
-        }
+    questionsData?.forEach((q) => {
+      counts[q.topic_id] =
+        (counts[q.topic_id] || 0) + 1;
+    });
 
-        return {
-          ...topic,
-          questionCount: count || 0,
-        };
-      })
-    );
+    const finalTopics =
+      topicsData?.map((topic) => ({
+        ...topic,
+        questionCount:
+          counts[topic.id] || 0,
+      })) || [];
 
     setTopics(finalTopics);
   }
@@ -371,13 +362,7 @@ export default function Home() {
 
             <button
               onClick={() =>
-                navigate("/quiz-setup", {
-                  state: {
-                    mode: "mixed",
-                    topicName:
-                      "Mixed Practice",
-                  },
-                })
+                navigate("/mixed-practice-sets")
               }
               className="
                 bg-slate-50
@@ -399,8 +384,7 @@ export default function Home() {
               </h3>
 
               <p className="text-sm text-gray-500">
-                Practice all subjects
-                together
+                50-question balanced sets across all subjects
               </p>
             </button>
 
