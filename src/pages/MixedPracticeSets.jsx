@@ -318,7 +318,7 @@ export default function MixedPracticeSets() {
 
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-4xl font-bold">
+            <h1 className="text-4xl font-bold" style={{ color: "#f97316" }}>
               Mixed Practice Sets
             </h1>
             <p className="text-gray-500 mt-2">
@@ -352,7 +352,7 @@ export default function MixedPracticeSets() {
               className="bg-white border rounded-xl p-5 flex items-center justify-between"
             >
               <div>
-                <h2 className="font-bold text-lg">
+                <h2 className="font-bold text-lg" style={{ color: "#f97316" }}>
                   Set {practiceSet.number}
                 </h2>
                 <p className="text-gray-500">

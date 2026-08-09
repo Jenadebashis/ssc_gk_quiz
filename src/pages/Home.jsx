@@ -11,11 +11,9 @@ import {
 export default function Home() {
   const [topics, setTopics] = useState([]);
   const [stats, setStats] = useState(null);
-  const [dailyTarget, setDailyTarget] =
-    useState(50);
+  const [dailyTarget, setDailyTarget] = useState(50);
 
-  const [todaySolved, setTodaySolved] =
-    useState(0);
+  const [todaySolved, setTodaySolved] = useState(0);
 
   const navigate = useNavigate();
 
@@ -25,13 +23,30 @@ export default function Home() {
       .select("*")
       .order("name");
 
-    const { data: questionsData } = await supabase
-      .from("questions")
-      .select("topic_id");
+    const questionsData = [];
+    const PAGE_SIZE = 1000;
+
+    for (let from = 0; ; from += PAGE_SIZE) {
+      const { data, error } = await supabase
+        .from("questions")
+        .select("topic_id")
+        .range(from, from + PAGE_SIZE - 1);
+
+      if (error) {
+        console.error(error);
+        break;
+      }
+
+      questionsData.push(...(data || []));
+
+      if (!data || data.length < PAGE_SIZE) {
+        break;
+      }
+    }
 
     const counts = {};
 
-    questionsData?.forEach((q) => {
+    questionsData.forEach((q) => {
       counts[q.topic_id] =
         (counts[q.topic_id] || 0) + 1;
     });
@@ -93,7 +108,6 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-
       <div className="max-w-7xl mx-auto p-8">
 
         <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-3xl p-10 text-white mb-10">
@@ -108,6 +122,7 @@ export default function Home() {
           </p>
 
         </div>
+
         <div className="bg-white rounded-3xl border p-6 mb-8 shadow-sm">
 
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -119,8 +134,7 @@ export default function Home() {
               </h2>
 
               <p className="text-gray-500 mt-1">
-                {todaySolved} / {dailyTarget}
-                {" "}
+                {todaySolved} / {dailyTarget}{" "}
                 Questions Completed Today
               </p>
 
@@ -144,23 +158,23 @@ export default function Home() {
                   )
                 }
                 className="
-          border
-          rounded-xl
-          px-4
-          py-2
-          w-24
-        "
+                  border
+                  rounded-xl
+                  px-4
+                  py-2
+                  w-24
+                "
               />
 
               <button
                 onClick={updateTarget}
                 className="
-          bg-indigo-600
-          text-white
-          px-5
-          rounded-xl
-          hover:bg-indigo-700
-        "
+                  bg-indigo-600
+                  text-white
+                  px-5
+                  rounded-xl
+                  hover:bg-indigo-700
+                "
               >
                 Save
               </button>
@@ -179,7 +193,8 @@ export default function Home() {
                     dailyTarget) *
                   100,
                   100
-                )}%`,
+                )
+                  }% `,
               }}
             />
 
@@ -271,7 +286,7 @@ export default function Home() {
             <div
               key={topic.id}
               onClick={() =>
-                navigate(`/topic/${topic.id}`)
+                navigate(`/ topic / ${topic.id} `)
               }
               className="
                 bg-white
@@ -284,13 +299,16 @@ export default function Home() {
                 transition
               "
             >
-              <h2 className="text-xl font-bold mb-2">
+              <h2
+                className="text-xl font-bold mb-2"
+                style={{ color: "#f97316" }}
+              >
                 📚 {topic.name}
               </h2>
-
               <p className="text-gray-500">
                 {topic.questionCount} Questions
               </p>
+
             </div>
           ))}
 
@@ -393,7 +411,6 @@ export default function Home() {
         </div>
 
       </div>
-
     </div>
   );
 }
