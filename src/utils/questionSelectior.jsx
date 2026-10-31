@@ -3,6 +3,23 @@ import { supabase } from '../api/supabase';
 const SET_SIZE = 30;
 
 /**
+ * Standard question selector for topic/subtopic runs
+ */
+export function selectQuestions(candidateQuestions = [], attemptCounts = {}, targetCount = 30) {
+  if (!candidateQuestions.length) return [];
+  const count = Math.min(targetCount || 30, candidateQuestions.length);
+
+  // Sort candidate questions by least attempted
+  const sorted = [...candidateQuestions].sort((a, b) => {
+    const attemptsA = attemptCounts[a.id] || 0;
+    const attemptsB = attemptCounts[b.id] || 0;
+    return attemptsA - attemptsB;
+  });
+
+  return sorted.slice(0, count);
+}
+
+/**
  * Returns available sets for a topic and user attempt stats
  */
 export async function getTopicSetsSummary(topicId, userId) {
@@ -37,7 +54,8 @@ export async function getTopicSetsSummary(topicId, userId) {
   for (let i = 1; i <= fullSetsCount; i++) {
     const setAttempts = attempts.filter((a) => a.set_number === i);
     const attemptCount = setAttempts.length;
-    const bestScore = attemptCount > 0 ? Math.max(...setAttempts.map((a) => a.score)) : null;
+    const bestScore =
+      attemptCount > 0 ? Math.max(...setAttempts.map((a) => a.score)) : null;
 
     sets.push({
       setNumber: i,
@@ -46,7 +64,7 @@ export async function getTopicSetsSummary(topicId, userId) {
       totalQuestions: SET_SIZE,
       isPartial: false,
       attemptCount,
-      bestScore
+      bestScore,
     });
   }
 
@@ -55,7 +73,8 @@ export async function getTopicSetsSummary(topicId, userId) {
     const partialSetNumber = fullSetsCount + 1;
     const setAttempts = attempts.filter((a) => a.set_number === partialSetNumber);
     const attemptCount = setAttempts.length;
-    const bestScore = attemptCount > 0 ? Math.max(...setAttempts.map((a) => a.score)) : null;
+    const bestScore =
+      attemptCount > 0 ? Math.max(...setAttempts.map((a) => a.score)) : null;
 
     sets.push({
       setNumber: partialSetNumber,
@@ -64,7 +83,7 @@ export async function getTopicSetsSummary(topicId, userId) {
       totalQuestions: remainder,
       isPartial: true,
       attemptCount,
-      bestScore
+      bestScore,
     });
   }
 
@@ -72,7 +91,7 @@ export async function getTopicSetsSummary(topicId, userId) {
 }
 
 /**
- * Deterministically fetches questions for a specific set (ordered strictly by id)
+ * Deterministically fetches questions for a specific set (ordered strictly by created_at)
  */
 export async function fetchSetQuestions(topicId, setNumber) {
   const from = (setNumber - 1) * SET_SIZE;
@@ -82,7 +101,7 @@ export async function fetchSetQuestions(topicId, setNumber) {
     .from('questions')
     .select('*')
     .eq('topic_id', topicId)
-    .order('id', { ascending: true }) // Deterministic order guarantees stability
+    .order('created_at', { ascending: true }) // Guarantees older sets never shift when new rows are added
     .range(from, to);
 
   if (error) throw error;
@@ -103,8 +122,8 @@ export async function recordSetAttempt({ userId, topicId, setNumber, score, tota
         topic_id: topicId,
         set_number: setNumber,
         score,
-        total_questions: totalQuestions
-      }
+        total_questions: totalQuestions,
+      },
     ])
     .select();
 
