@@ -89,26 +89,71 @@ export default function Quiz() {
     initQuiz();
   }, [topicId, subtopicId, setNumber]);
 
-  // Submit Handler
+  // Helper to parse correct_answer into an integer index (0, 1, 2, 3)
+  const parseAnswerIndex = (val) => {
+    if (val === undefined || val === null || val === '') return null;
+    if (typeof val === 'number') return val;
+    const str = String(val).trim().toUpperCase();
+    if (['A', 'B', 'C', 'D', 'E'].includes(str)) {
+      return str.charCodeAt(0) - 65;
+    }
+    const parsed = parseInt(str, 10);
+    return Number.isNaN(parsed) ? null : parsed;
+  };
+
+  // Inside Quiz component:
+  const handleSelectOption = (index) => {
+    const currentQ = questions[currentIndex];
+    setAnswers((prev) => ({
+      ...prev,
+      [currentQ.id]: index
+    }));
+  };
+
   const handleSubmitQuiz = useCallback(async () => {
     if (submitting) return;
     setSubmitting(true);
     clearInterval(timerRef.current);
 
-    const activeQuestions = questionsRef.current;
+    const rawQuestions = questionsRef.current;
     const currentAnswers = answersRef.current;
 
-    // Calculate performance metrics
+    // 1. Normalize questions so Results.jsx can render q.question and q.options[index] cleanly
+    const normalizedQuestions = rawQuestions.map((q) => {
+      // Ensure options is an array of strings
+      let optionsArr = [];
+      if (Array.isArray(q.options)) {
+        optionsArr = q.options.map((opt) => (typeof opt === 'object' && opt !== null ? opt.text || opt.label : String(opt)));
+      } else if (q.options && typeof q.options === 'object') {
+        optionsArr = Object.values(q.options);
+      } else {
+        ['a', 'b', 'c', 'd', 'e'].forEach((l) => {
+          const val = q[`option_${l}`] || q[`option${l.toUpperCase()}`];
+          if (val) optionsArr.push(String(val));
+        });
+      }
+
+      const correctIndex = parseAnswerIndex(q.correct_answer);
+
+      return {
+        ...q,
+        id: q.id,
+        question: q.question || q.question_text || '',
+        options: optionsArr,
+        correct_answer: correctIndex
+      };
+    });
+
+    // 2. Tally scores and build mistake counts for Results.jsx
     let correctCount = 0;
     let wrongCount = 0;
     let unattemptedCount = 0;
+    const mistakeCounts = {};
 
-    const reviewItems = activeQuestions.map((q) => {
-      const selected = currentAnswers[q.id];
-      const isAttempted = selected !== undefined && selected !== null;
-      const isCorrect =
-        isAttempted &&
-        String(selected).trim().toLowerCase() === String(q.correct_answer).trim().toLowerCase();
+    normalizedQuestions.forEach((q) => {
+      const userAns = currentAnswers[q.id];
+      const isAttempted = userAns !== undefined && userAns !== null;
+      const isCorrect = isAttempted && userAns === q.correct_answer;
 
       if (!isAttempted) {
         unattemptedCount += 1;
@@ -116,21 +161,13 @@ export default function Quiz() {
         correctCount += 1;
       } else {
         wrongCount += 1;
+        mistakeCounts[q.id] = 1; // Mark as mistake for "Questions With Mistakes" filter
       }
-
-      return {
-        question_id: q.id,
-        question_text: q.question_text,
-        selected_option: selected || null,
-        correct_answer: q.correct_answer,
-        is_correct: isCorrect,
-        explanation: q.explanation || null,
-      };
     });
 
     const scorePercent =
-      activeQuestions.length > 0
-        ? Number(((correctCount / activeQuestions.length) * 100).toFixed(2))
+      normalizedQuestions.length > 0
+        ? Number(((correctCount / normalizedQuestions.length) * 100).toFixed(2))
         : 0;
 
     const timeSpent = Math.max(0, timerLimitMinutes * 60 - timeLeft);
@@ -138,20 +175,20 @@ export default function Quiz() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
 
-      // 1. Record fixed 30-question set attempt counter (if setNumber mode)
+      // Record fixed 30-question set completion counter
       if (user && topicId && setNumber) {
         await recordSetAttempt({
           userId: user.id,
           topicId,
           setNumber,
           score: correctCount,
-          totalQuestions: activeQuestions.length,
+          totalQuestions: normalizedQuestions.length
         });
       }
 
-      // 2. Insert into main attempts table using your exact schema columns
+      // Save into main attempts & attempt_answers tables
       if (user) {
-        const { data: attemptRecord, error: attemptErr } = await supabase
+        const { data: attemptRecord } = await supabase
           .from('attempts')
           .insert([
             {
@@ -159,74 +196,58 @@ export default function Quiz() {
               topic_id: topicId || null,
               subtopic_id: subtopicId || null,
               mode: setNumber ? 'set_practice' : subtopicId ? 'subtopic' : 'topic',
-              total_questions: activeQuestions.length,
+              total_questions: normalizedQuestions.length,
               correct_answers: correctCount,
               score_percent: scorePercent,
               correct_count: correctCount,
               wrong_count: wrongCount,
               unattempted_count: unattemptedCount,
               time_spent_seconds: timeSpent,
-              completed_at: new Date().toISOString(),
-            },
+              completed_at: new Date().toISOString()
+            }
           ])
           .select()
           .single();
 
-        if (attemptErr) {
-          console.error('Error inserting attempt:', attemptErr);
-        } else if (attemptRecord) {
-          const detailRows = reviewItems.map((item) => ({
-            attempt_id: attemptRecord.id,
-            user_id: user.id,
-            question_id: item.question_id,
-            selected_answer: toOptionIndex(item.selected_option),
-            correct_answer: toOptionIndex(item.correct_answer),
-            is_correct: item.is_correct,
-            answered_at: new Date().toISOString()
-          }));
+        if (attemptRecord) {
+          const detailRows = normalizedQuestions.map((q) => {
+            const userAns = currentAnswers[q.id];
+            return {
+              attempt_id: attemptRecord.id,
+              user_id: user.id,
+              question_id: q.id,
+              selected_answer: userAns !== undefined ? userAns : null,
+              correct_answer: q.correct_answer,
+              is_correct: userAns !== undefined && userAns === q.correct_answer,
+              answered_at: new Date().toISOString()
+            };
+          });
 
-          const { error: answersInsertErr } = await supabase
-            .from('attempt_answers')
-            .insert(detailRows);
-
-          if (answersInsertErr) {
-            console.error('Error inserting attempt_answers:', answersInsertErr);
-          }
+          await supabase.from('attempt_answers').insert(detailRows);
         }
       }
 
+      // Navigate with exact state expected by Results.jsx
       navigate('/results', {
         state: {
-          score: correctCount,
-          total: activeQuestions.length,
-          correctCount,
-          wrongCount,
-          unattemptedCount,
-          topicId,
-          setNumber,
-          // Provide both formats so Results.jsx finds its array
-          reviewItems,
-          questions: activeQuestions,
+          questions: normalizedQuestions,
           answers: currentAnswers,
-          results: reviewItems
+          mistakeCounts,
+          quizInfo: {
+            topicName: setNumber ? `Practice Set ${setNumber < 10 ? `0${setNumber}` : setNumber}` : 'Topic Practice'
+          }
         }
       });
     } catch (err) {
-      console.error('Failed to submit attempt:', err);
+      console.error('Submission error:', err);
       navigate('/results', {
         state: {
-          score: correctCount,
-          total: activeQuestions.length,
-          correctCount,
-          wrongCount,
-          unattemptedCount,
-          topicId,
-          setNumber,
-          // Provide both formats so Results.jsx finds its array
-          reviewItems,
-          questions: activeQuestions,
+          questions: normalizedQuestions,
           answers: currentAnswers,
-          results: reviewItems
+          mistakeCounts,
+          quizInfo: {
+            topicName: setNumber ? `Practice Set ${setNumber < 10 ? `0${setNumber}` : setNumber}` : 'Topic Practice'
+          }
         }
       });
     }
@@ -263,13 +284,17 @@ export default function Quiz() {
   }, [answers, submitting]);
 
   // Handlers
-  const handleSelectOption = (optionKey) => {
-    const currentQ = questions[currentIndex];
-    setAnswers((prev) => ({
-      ...prev,
-      [currentQ.id]: optionKey
-    }));
-  };
+  // const handleSelectOption = (optionKey, optionText) => {
+  //   const currentQ = questions[currentIndex];
+  //   setAnswers((prev) => ({
+  //     ...prev,
+  //     [currentQ.id]: {
+  //       key: optionKey, // 'A', 'B', etc.
+  //       text: optionText, // Full string text
+  //       index: optionKey.charCodeAt(0) - 65 // 0, 1, 2, etc.
+  //     }
+  //   }));
+  // };
 
   const handleClearAnswer = () => {
     const currentQ = questions[currentIndex];
@@ -379,8 +404,8 @@ export default function Quiz() {
           <div className="bg-white border rounded-xl p-6 shadow-sm">
             <QuestionCard
               question={currentQ}
-              selectedAnswer={answers[currentQ.id]}
-              onSelectAnswer={handleSelectOption}
+              selectedAnswer={answers[currentQ.id]?.key || answers[currentQ.id]}
+              onSelectAnswer={(key, text) => handleSelectOption(key, text)}
             />
 
             {/* In-Card Tool Actions: Clear selection & Mark for Review */}
