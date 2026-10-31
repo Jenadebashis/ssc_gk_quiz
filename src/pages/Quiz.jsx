@@ -1,714 +1,506 @@
-import { useEffect, useMemo, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
-import { supabase } from "../api/supabase";
-import { saveAttempt } from "../api/attempt";
-import {
-  incrementWrongCount,
-  getWrongCount,
-  decrementWrongCount,
-} from "../api/questionProgress";
-import { selectQuestions } from "../utils/questionSelectior";
+import React, { useEffect, useState, useRef, useCallback } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
+import { supabase } from '../api/supabase';
+import { fetchSetQuestions, recordSetAttempt } from '../utils/questionSelectior';
+import QuestionCard from '../components/QuestionCard';
 
-function getRetryDelay(totalQuestions) {
-  return Math.min(
-    3,
-    Math.max(1, Math.floor(totalQuestions / 4))
-  );
-}
+const toOptionIndex = (val) => {
+  if (val === undefined || val === null || val === '') return null;
+  if (typeof val === 'number') return val;
+  const str = String(val).trim().toUpperCase();
+  if (['A', 'B', 'C', 'D', 'E'].includes(str)) {
+    return str.charCodeAt(0) - 65;
+  }
+  const parsed = parseInt(str, 10);
+  return Number.isNaN(parsed) ? null : parsed;
+};
 
 export default function Quiz() {
-  const { state } = useLocation();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
-  const [questions, setQuestions] = useState([]);
-  const [queue, setQueue] = useState([]);
-  const [answers, setAnswers] = useState({});
-  const [mistakeCounts, setMistakeCounts] = useState({});
+  // Route params: supports both custom setup mode and fixed 30-question set mode
+  const topicId = searchParams.get('topicId');
+  const subtopicId = searchParams.get('subtopicId');
+  const setNumber = searchParams.get('set') ? parseInt(searchParams.get('set'), 10) : null;
+  const timerLimitMinutes = searchParams.get('time') ? parseInt(searchParams.get('time'), 10) : 30;
 
-  const [showOptions, setShowOptions] = useState(false);
-  const [feedback, setFeedback] = useState(null);
-  const [reducePrompt, setReducePrompt] = useState(null);
+  // Question & Session States
+  const [questions, setQuestions] = useState([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [answers, setAnswers] = useState({}); // { [questionId]: selectedOption }
+  const [markedForReview, setMarkedForReview] = useState(new Set());
+  const [timeLeft, setTimeLeft] = useState(timerLimitMinutes * 60);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+
+  const timerRef = useRef(null);
+  const answersRef = useRef(answers);
+  const questionsRef = useRef(questions);
+
+  // Sync refs for event listeners and auto-submit
+  useEffect(() => {
+    answersRef.current = answers;
+  }, [answers]);
 
   useEffect(() => {
-    loadQuestions();
-  }, []);
-
-  async function loadQuestions() {
-    if (!state) {
-      navigate("/");
-      return;
-    }
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      navigate("/login");
-      return;
-    }
-
-    let query = supabase
-      .from("questions")
-      .select("*");
-
-    if (state.mode === "set") {
-      if (
-        !Array.isArray(state.questionIds) ||
-        !state.questionIds.length
-      ) {
-        setQuestions([]);
-        setLoading(false);
-        return;
-      }
-
-      const { data: setQuestionRows, error } = await query
-        .in("id", state.questionIds);
-
-      if (error) {
-        console.error(error);
-        setLoading(false);
-        return;
-      }
-
-      const questionMap = Object.fromEntries(
-        (setQuestionRows || []).map((question) => [
-          question.id,
-          question,
-        ])
-      );
-
-      // Supabase does not guarantee the order of an IN query, so restore
-      // the permanent random order saved by the practice-set page.
-      const orderedQuestions = state.questionIds
-        .map((id) => questionMap[id])
-        .filter(Boolean);
-
-      setQuestions(orderedQuestions);
-      setQueue(orderedQuestions.map((q) => q.id));
-      setLoading(false);
-      return;
-    }
-
-    if (state.mode === "wrong-questions") {
-      // If a specific wrong-question set was selected,
-      // load ONLY those questions.
-      if (
-        Array.isArray(state.questionIds) &&
-        state.questionIds.length > 0
-      ) {
-        const { data, error } = await query
-          .in("id", state.questionIds);
-
-        if (error) {
-          console.error(error);
-          setLoading(false);
-          return;
-        }
-
-        const questionMap = Object.fromEntries(
-          (data || []).map((question) => [
-            question.id,
-            question,
-          ])
-        );
-
-        // Preserve the exact set order.
-        const selectedQuestions =
-          state.questionIds
-            .map((id) => questionMap[id])
-            .filter(Boolean);
-
-        setQuestions(selectedQuestions);
-        setQueue(
-          selectedQuestions.map((q) => q.id)
-        );
-        setLoading(false);
-        return;
-      }
-
-      // Fallback: practice all currently wrong questions.
-      const { data, error } = await supabase
-        .from("question_progress")
-        .select(`
-      question_id,
-      wrong_count,
-      questions (*)
-    `)
-        .eq("user_id", user.id)
-        .gt("wrong_count", 0)
-        .order("wrong_count", {
-          ascending: false,
-        });
-
-      if (error) {
-        console.error(error);
-        setLoading(false);
-        return;
-      }
-
-      const wrongQuestions = (data || [])
-        .map((item) => item.questions)
-        .filter(Boolean);
-
-      setQuestions(wrongQuestions);
-      setQueue(
-        wrongQuestions.map((q) => q.id)
-      );
-      setLoading(false);
-      return;
-    }
-
-    if (state.mode === "topic") {
-      query = query.eq("topic_id", state.topicId);
-    }
-
-    if (state.mode === "subtopic") {
-      query = query.eq(
-        "subtopic_id",
-        state.subtopicId
-      );
-    }
-
-    const {
-      data: candidateQuestions,
-      error,
-    } = await query;
-
-    if (error) {
-      console.error(error);
-      setLoading(false);
-      return;
-    }
-
-    const questionIds = candidateQuestions.map(
-      (q) => q.id
-    );
-
-    let attemptData = [];
-
-    if (questionIds.length) {
-      const { data } = await supabase
-        .from("attempt_answers")
-        .select("question_id")
-        .eq("user_id", user.id)
-        .in("question_id", questionIds);
-
-      attemptData = data || [];
-    }
-
-    const attemptCounts = {};
-
-    attemptData.forEach((row) => {
-      attemptCounts[row.question_id] =
-        (attemptCounts[row.question_id] || 0) + 1;
-    });
-
-    const selectedQuestions = selectQuestions(
-      candidateQuestions,
-      attemptCounts,
-      state.questionCount
-    );
-
-    setQuestions(selectedQuestions);
-    setQueue(selectedQuestions.map((q) => q.id));
-    setLoading(false);
-  }
-
-  const questionMap = useMemo(() => {
-    return Object.fromEntries(
-      questions.map((question) => [
-        question.id,
-        question,
-      ])
-    );
+    questionsRef.current = questions;
   }, [questions]);
 
-  const currentQuestion =
-    queue.length > 0
-      ? questionMap[queue[0]]
-      : null;
-
-  const masteredCount =
-    questions.length - queue.length;
-
-  const retryDelay = getRetryDelay(
-    questions.length
-  );
-
-  function showQuestionOptions() {
-    setShowOptions(true);
-    setFeedback(null);
-  }
-
-  async function selectAnswer(index) {
-    if (!currentQuestion || feedback) {
-      return;
-    }
-
-    const isCorrect =
-      index === currentQuestion.correct_answer;
-
-    setAnswers((prev) => ({
-      ...prev,
-      [currentQuestion.id]: index,
-    }));
-
-    if (isCorrect) {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      let wrongCount = 0;
-
-      if (user) {
-        try {
-          wrongCount = await getWrongCount({
-            userId: user.id,
-            questionId: currentQuestion.id,
-          });
-        } catch (error) {
-          console.error(
-            "Failed to get wrong count:",
-            error
-          );
-        }
-      }
-
-      setFeedback({
-        type: "correct",
-        selectedAnswer: index,
-      });
-
-      if (wrongCount > 0) {
-        setReducePrompt({
-          questionId: currentQuestion.id,
-          wrongCount,
-        });
-      }
-
-      return;
-    }
-
-    setMistakeCounts((prev) => ({
-      ...prev,
-      [currentQuestion.id]:
-        (prev[currentQuestion.id] || 0) + 1,
-    }));
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (user) {
-      console.log(
-        "WRONG ANSWER - updating progress",
-        {
-          userId: user.id,
-          questionId: currentQuestion.id,
-        }
-      );
-
+  // Load questions: checks for setNumber first, falls back to subtopic/topic query
+  useEffect(() => {
+    async function initQuiz() {
+      setLoading(true);
       try {
-        const count = await incrementWrongCount({
-          userId: user.id,
-          questionId: currentQuestion.id,
-        });
+        let loadedQuestions = [];
 
-        console.log(
-          "WRONG COUNT UPDATED:",
-          count
-        );
-      } catch (error) {
-        console.error(
-          "Failed to update wrong count:",
-          error
-        );
+        if (topicId && setNumber) {
+          // 30-Question Fixed Set Flow
+          loadedQuestions = await fetchSetQuestions(topicId, setNumber);
+        } else if (subtopicId) {
+          // Standard Subtopic Flow
+          const { data, error } = await supabase
+            .from('questions')
+            .select('*')
+            .eq('subtopic_id', subtopicId)
+            .order('created_at', { ascending: true });
+          if (error) throw error;
+          loadedQuestions = data || [];
+        } else if (topicId) {
+          // Standard Topic Flow
+          const { data, error } = await supabase
+            .from('questions')
+            .select('*')
+            .eq('topic_id', topicId)
+            .order('created_at', { ascending: true });
+          if (error) throw error;
+          loadedQuestions = data || [];
+        }
+
+        setQuestions(loadedQuestions);
+      } catch (err) {
+        console.error('Error loading quiz questions:', err);
+      } finally {
+        setLoading(false);
       }
     }
 
-    setFeedback({
-      type: "wrong",
-      selectedAnswer: index,
+    initQuiz();
+  }, [topicId, subtopicId, setNumber]);
+
+  // Submit Handler
+  const handleSubmitQuiz = useCallback(async () => {
+    if (submitting) return;
+    setSubmitting(true);
+    clearInterval(timerRef.current);
+
+    const activeQuestions = questionsRef.current;
+    const currentAnswers = answersRef.current;
+
+    // Calculate performance metrics
+    let correctCount = 0;
+    let wrongCount = 0;
+    let unattemptedCount = 0;
+
+    const reviewItems = activeQuestions.map((q) => {
+      const selected = currentAnswers[q.id];
+      const isAttempted = selected !== undefined && selected !== null;
+      const isCorrect =
+        isAttempted &&
+        String(selected).trim().toLowerCase() === String(q.correct_answer).trim().toLowerCase();
+
+      if (!isAttempted) {
+        unattemptedCount += 1;
+      } else if (isCorrect) {
+        correctCount += 1;
+      } else {
+        wrongCount += 1;
+      }
+
+      return {
+        question_id: q.id,
+        question_text: q.question_text,
+        selected_option: selected || null,
+        correct_answer: q.correct_answer,
+        is_correct: isCorrect,
+        explanation: q.explanation || null,
+      };
     });
-  }
 
-  async function continueAfterAnswer() {
-    if (!currentQuestion || !feedback) {
-      return;
-    }
+    const scorePercent =
+      activeQuestions.length > 0
+        ? Number(((correctCount / activeQuestions.length) * 100).toFixed(2))
+        : 0;
 
-    const remaining = queue.slice(1);
-
-    if (feedback.type === "correct") {
-      if (remaining.length === 0) {
-        await submitQuiz();
-        return;
-      }
-
-      setReducePrompt(null);
-      setQueue(remaining);
-      setShowOptions(false);
-      setFeedback(null);
-      return;
-    }
-
-    const delay = Math.min(
-      retryDelay,
-      remaining.length
-    );
-
-    const nextQueue = [
-      ...remaining.slice(0, delay),
-      currentQuestion.id,
-      ...remaining.slice(delay),
-    ];
-
-    setReducePrompt(null);
-    setQueue(nextQueue);
-    setShowOptions(false);
-    setFeedback(null);
-  }
-
-  async function submitQuiz() {
-    if (submitting) {
-      return;
-    }
+    const timeSpent = Math.max(0, timerLimitMinutes * 60 - timeLeft);
 
     try {
-      setSubmitting(true);
+      const { data: { user } } = await supabase.auth.getUser();
 
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) {
-        alert("Please login");
-        setSubmitting(false);
-        return;
+      // 1. Record fixed 30-question set attempt counter (if setNumber mode)
+      if (user && topicId && setNumber) {
+        await recordSetAttempt({
+          userId: user.id,
+          topicId,
+          setNumber,
+          score: correctCount,
+          totalQuestions: activeQuestions.length,
+        });
       }
 
-      const attempt = await saveAttempt({
-        userId: user.id,
-        quizInfo: state,
-        questions,
-        answers,
-        mixedPracticeRunId:
-          state.mixedPracticeRunId || null,
-        mixedPracticeSetNumber:
-          state.setNumber || null,
-      });
+      // 2. Insert into main attempts table using your exact schema columns
+      if (user) {
+        const { data: attemptRecord, error: attemptErr } = await supabase
+          .from('attempts')
+          .insert([
+            {
+              user_id: user.id,
+              topic_id: topicId || null,
+              subtopic_id: subtopicId || null,
+              mode: setNumber ? 'set_practice' : subtopicId ? 'subtopic' : 'topic',
+              total_questions: activeQuestions.length,
+              correct_answers: correctCount,
+              score_percent: scorePercent,
+              correct_count: correctCount,
+              wrong_count: wrongCount,
+              unattempted_count: unattemptedCount,
+              time_spent_seconds: timeSpent,
+              completed_at: new Date().toISOString(),
+            },
+          ])
+          .select()
+          .single();
 
-      navigate("/results", {
+        if (attemptErr) {
+          console.error('Error inserting attempt:', attemptErr);
+        } else if (attemptRecord) {
+          const detailRows = reviewItems.map((item) => ({
+            attempt_id: attemptRecord.id,
+            user_id: user.id,
+            question_id: item.question_id,
+            selected_answer: toOptionIndex(item.selected_option),
+            correct_answer: toOptionIndex(item.correct_answer),
+            is_correct: item.is_correct,
+            answered_at: new Date().toISOString()
+          }));
+
+          const { error: answersInsertErr } = await supabase
+            .from('attempt_answers')
+            .insert(detailRows);
+
+          if (answersInsertErr) {
+            console.error('Error inserting attempt_answers:', answersInsertErr);
+          }
+        }
+      }
+
+      navigate('/results', {
         state: {
-          questions,
-          answers,
-          mistakeCounts,
-          quizInfo: state,
-          attemptId: attempt.id,
-        },
+          score: correctCount,
+          total: activeQuestions.length,
+          correctCount,
+          wrongCount,
+          unattemptedCount,
+          topicId,
+          setNumber,
+          // Provide both formats so Results.jsx finds its array
+          reviewItems,
+          questions: activeQuestions,
+          answers: currentAnswers,
+          results: reviewItems
+        }
       });
     } catch (err) {
-      console.error(err);
-      alert("Failed to save attempt");
-      setSubmitting(false);
+      console.error('Failed to submit attempt:', err);
+      navigate('/results', {
+        state: {
+          score: correctCount,
+          total: activeQuestions.length,
+          correctCount,
+          wrongCount,
+          unattemptedCount,
+          topicId,
+          setNumber,
+          // Provide both formats so Results.jsx finds its array
+          reviewItems,
+          questions: activeQuestions,
+          answers: currentAnswers,
+          results: reviewItems
+        }
+      });
     }
-  }
+  }, [submitting, topicId, subtopicId, setNumber, timerLimitMinutes, timeLeft, navigate]);
+
+  // Timer loop with Auto-submit
+  useEffect(() => {
+    if (loading || questions.length === 0) return;
+
+    timerRef.current = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(timerRef.current);
+          handleSubmitQuiz();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timerRef.current);
+  }, [loading, questions.length, handleSubmitQuiz]);
+
+  // Tab close / reload prevention
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (!submitting && Object.keys(answers).length > 0) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [answers, submitting]);
+
+  // Handlers
+  const handleSelectOption = (optionKey) => {
+    const currentQ = questions[currentIndex];
+    setAnswers((prev) => ({
+      ...prev,
+      [currentQ.id]: optionKey
+    }));
+  };
+
+  const handleClearAnswer = () => {
+    const currentQ = questions[currentIndex];
+    setAnswers((prev) => {
+      const next = { ...prev };
+      delete next[currentQ.id];
+      return next;
+    });
+  };
+
+  const toggleMarkReview = () => {
+    const currentQ = questions[currentIndex];
+    setMarkedForReview((prev) => {
+      const next = new Set(prev);
+      if (next.has(currentQ.id)) {
+        next.delete(currentQ.id);
+      } else {
+        next.add(currentQ.id);
+      }
+      return next;
+    });
+  };
+
+  // Format MM:SS
+  const formatTime = (secs) => {
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    return `${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
+  };
 
   if (loading) {
     return (
-      <div className="p-10">
-        Loading Questions...
+      <div className="flex flex-col items-center justify-center min-h-[60vh]">
+        <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
+        <p className="text-gray-600 font-medium">Preparing your questions...</p>
       </div>
     );
   }
 
-  if (!questions.length) {
+  if (questions.length === 0) {
     return (
-      <div className="p-10">
-        No Questions Found
+      <div className="max-w-md mx-auto text-center p-8 bg-white border rounded-xl shadow-sm mt-12">
+        <h2 className="text-xl font-bold text-gray-800 mb-2">No Questions Available</h2>
+        <p className="text-sm text-gray-500 mb-6">
+          There are no questions found for this selection.
+        </p>
+        <button
+          onClick={() => navigate(-1)}
+          className="px-5 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700"
+        >
+          Go Back
+        </button>
       </div>
     );
   }
 
-  if (!currentQuestion) {
-    return (
-      <div className="max-w-4xl mx-auto p-6">
-        <div className="bg-white border rounded-xl p-8 text-center">
-          <h2 className="text-2xl font-bold mb-2">
-            Quiz Complete
-          </h2>
-
-          <p className="text-gray-600">
-            All questions have been answered correctly.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  const selectedAnswer =
-    feedback?.selectedAnswer;
-
-  const isWrong =
-    feedback?.type === "wrong";
+  const currentQ = questions[currentIndex];
+  const isAnswered = answers[currentQ.id] !== undefined;
+  const isMarked = markedForReview.has(currentQ.id);
 
   return (
-    <div className="max-w-4xl mx-auto p-6">
-      <div className="flex items-center justify-between mb-2">
-        <h2 className="text-xl font-bold">
-          Mastered {masteredCount} /{" "}
-          {questions.length}
-        </h2>
+    <div className="max-w-6xl mx-auto px-4 py-6">
+      {/* Top Bar: Progress, Set/Topic Indicator, and Countdown Timer */}
+      <div className="flex flex-wrap items-center justify-between gap-4 p-4 bg-white border rounded-xl shadow-sm mb-6">
+        <div>
+          <span className="text-xs uppercase tracking-wider font-semibold text-gray-400">
+            {setNumber ? `Set ${setNumber < 10 ? `0${setNumber}` : setNumber}` : 'General Practice'}
+          </span>
+          <h2 className="text-lg font-bold text-gray-800">
+            Question {currentIndex + 1} of {questions.length}
+          </h2>
+        </div>
 
-        <span className="text-sm text-gray-500">
-          {queue.length} question
-          {queue.length !== 1 ? "s" : ""} remaining
-        </span>
-      </div>
-
-      <div className="text-sm text-gray-500 mb-4">
-        {isWrong
-          ? `This question will return after ${Math.min(
-            retryDelay,
-            Math.max(1, queue.length - 1)
-          )
-          } other question${Math.min(
-            retryDelay,
-            Math.max(1, queue.length - 1)
-          ) !== 1
-            ? "s"
-            : ""
-          }.`
-          : "Active recall: answer from memory before revealing the options."}
-      </div>
-
-      <div className="bg-white border rounded-xl p-6">
-        <h3 className="text-lg font-medium leading-7 mb-6">
-          {currentQuestion.question}
-        </h3>
-
-        {!showOptions && (
-          <button
-            onClick={showQuestionOptions}
-            className="w-full bg-black text-white px-5 py-3 rounded-xl font-medium hover:bg-gray-800 transition"
-          >
-            Show Options
-          </button>
-        )}
-
-        {showOptions && (
-          <div className="space-y-3">
-            {currentQuestion.options.map(
-              (option, index) => {
-                const isSelected =
-                  selectedAnswer === index;
-
-                const isCorrectOption =
-                  index ===
-                  currentQuestion.correct_answer;
-
-                let optionClass =
-                  "bg-white border-gray-300 hover:bg-gray-50";
-
-                let badgeClass =
-                  "bg-gray-100 text-gray-700";
-
-                if (feedback) {
-                  if (isCorrectOption) {
-                    optionClass =
-                      "bg-green-50 border-green-500 text-green-800";
-
-                    badgeClass =
-                      "bg-green-500 text-white";
-                  } else if (
-                    isSelected &&
-                    isWrong
-                  ) {
-                    optionClass =
-                      "bg-red-50 border-red-500 text-red-800";
-
-                    badgeClass =
-                      "bg-red-500 text-white";
-                  } else {
-                    optionClass =
-                      "bg-gray-50 border-gray-200 text-gray-500";
-                  }
-                }
-
-                return (
-                  <button
-                    key={index}
-                    onClick={() =>
-                      selectAnswer(index)
-                    }
-                    disabled={Boolean(feedback)}
-                    className={`w - full text - left rounded - xl p - 4 border transition - all duration - 200 flex items - center justify - between ${optionClass
-                      } ${feedback
-                        ? "cursor-default"
-                        : "cursor-pointer"
-                      } `}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div
-                        className={`w - 8 h - 8 rounded - full flex items - center justify - center font - bold ${badgeClass} `}
-                      >
-                        {String.fromCharCode(
-                          65 + index
-                        )}
-                      </div>
-
-                      <span>{option}</span>
-                    </div>
-
-                    {feedback &&
-                      isCorrectOption && (
-                        <span className="text-xl text-green-600">
-                          ✓
-                        </span>
-                      )}
-
-                    {feedback &&
-                      isSelected &&
-                      isWrong && (
-                        <span className="text-xl text-red-600">
-                          ✗
-                        </span>
-                      )}
-                  </button>
-                );
-              }
-            )}
-          </div>
-        )}
-
-        {feedback && (
+        <div className="flex items-center gap-4">
+          {/* Countdown Clock */}
           <div
-            className={`mt - 6 rounded - xl border p - 5 ${feedback.type === "correct"
-              ? "bg-green-50 border-green-200"
-              : "bg-red-50 border-red-200"
-              } `}
+            className={`px-4 py-1.5 rounded-lg font-mono font-bold text-sm flex items-center gap-2 border ${timeLeft < 300
+              ? 'bg-red-50 text-red-600 border-red-200 animate-pulse'
+              : 'bg-gray-50 text-gray-700 border-gray-200'
+              }`}
           >
-            <div
-              className={`font - bold text - lg ${feedback.type === "correct"
-                ? "text-green-700"
-                : "text-red-700"
-                } `}
-            >
-              {feedback.type === "correct"
-                ? "✓ Correct"
-                : "✗ Wrong"}
-            </div>
-
-            {feedback.type === "wrong" && (
-              <>
-                <p className="mt-3 font-medium">
-                  Correct Answer:{" "}
-                  {
-                    currentQuestion.options[
-                    currentQuestion.correct_answer
-                    ]
-                  }
-                </p>
-
-                {currentQuestion.explanation && (
-                  <div className="mt-3 text-gray-700 whitespace-pre-line">
-                    <span className="font-semibold">
-                      Explanation:
-                    </span>{" "}
-                    {currentQuestion.explanation}
-                  </div>
-                )}
-
-                <p className="mt-4 text-sm text-red-700">
-                  You will see this question again
-                  after a few other questions.
-                </p>
-              </>
-            )}
+            <span>⏱️</span>
+            <span>{formatTime(timeLeft)}</span>
           </div>
-        )}
 
-        {reducePrompt && (
-          <div className="mt-4 rounded-xl border border-yellow-300 bg-yellow-50 p-5">
-            <p className="font-semibold text-yellow-900">
-              You got this question right.
-            </p>
-
-            <p className="mt-1 text-yellow-800">
-              Reduce wrong count from{" "}
-              <strong>
-                {reducePrompt.wrongCount}
-              </strong>{" "}
-              to{" "}
-              <strong>
-                {reducePrompt.wrongCount - 1}
-              </strong>
-              ?
-            </p>
-
-            <div className="flex gap-3 mt-4">
-              <button
-                onClick={() =>
-                  setReducePrompt(null)
-                }
-                className="px-4 py-2 rounded-lg border bg-white hover:bg-gray-50"
-              >
-                Keep {reducePrompt.wrongCount}
-              </button>
-
-              <button
-                onClick={async () => {
-                  const {
-                    data: { user },
-                  } = await supabase.auth.getUser();
-
-                  if (!user) return;
-
-                  try {
-                    await decrementWrongCount({
-                      userId: user.id,
-                      questionId:
-                        reducePrompt.questionId,
-                    });
-
-                    setReducePrompt(null);
-                  } catch (error) {
-                    console.error(
-                      "Failed to reduce wrong count:",
-                      error
-                    );
-                  }
-                }}
-                className="px-4 py-2 rounded-lg bg-yellow-500 text-white hover:bg-yellow-600"
-              >
-                Reduce to{" "}
-                {reducePrompt.wrongCount - 1}
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {showOptions && feedback && (
-        <div className="flex justify-end mt-6">
+          {/* Question Palette Toggle (Mobile/Responsive) */}
           <button
-            onClick={continueAfterAnswer}
-            disabled={submitting}
-            className="bg-black text-white px-5 py-3 rounded-xl disabled:opacity-50"
+            onClick={() => setPaletteOpen(!paletteOpen)}
+            className="md:hidden px-3 py-1.5 text-sm bg-gray-100 border rounded-lg font-medium"
           >
-            {submitting
-              ? "Saving..."
-              : feedback.type === "correct"
-                ? queue.length === 1
-                  ? "Finish Quiz"
-                  : "Continue"
-                : "Continue"}
+            {paletteOpen ? 'Hide Grid' : 'Question Grid'}
+          </button>
+
+          <button
+            onClick={handleSubmitQuiz}
+            disabled={submitting}
+            className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg text-sm transition"
+          >
+            {submitting ? 'Submitting...' : 'Submit Test'}
           </button>
         </div>
-      )}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
+        {/* Main Quiz Area */}
+        <div className="md:col-span-8 lg:col-span-9 space-y-4">
+          <div className="bg-white border rounded-xl p-6 shadow-sm">
+            <QuestionCard
+              question={currentQ}
+              selectedAnswer={answers[currentQ.id]}
+              onSelectAnswer={handleSelectOption}
+            />
+
+            {/* In-Card Tool Actions: Clear selection & Mark for Review */}
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-6 mt-6 border-t border-gray-100">
+              <div className="flex gap-2">
+                <button
+                  onClick={toggleMarkReview}
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition ${isMarked
+                    ? 'bg-amber-500 text-white border-amber-600'
+                    : 'bg-white text-amber-600 border-amber-300 hover:bg-amber-50'
+                    }`}
+                >
+                  {isMarked ? '★ Marked for Review' : '☆ Mark for Review'}
+                </button>
+                {isAnswered && (
+                  <button
+                    onClick={handleClearAnswer}
+                    className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50"
+                  >
+                    Clear Response
+                  </button>
+                )}
+              </div>
+
+              {/* Prev / Next Navigation Controls */}
+              <div className="flex gap-2">
+                <button
+                  disabled={currentIndex === 0}
+                  onClick={() => setCurrentIndex((prev) => prev - 1)}
+                  className="px-4 py-1.5 border border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-50 disabled:opacity-40"
+                >
+                  Previous
+                </button>
+                {currentIndex < questions.length - 1 ? (
+                  <button
+                    onClick={() => setCurrentIndex((prev) => prev + 1)}
+                    className="px-5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium"
+                  >
+                    Next
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleSubmitQuiz}
+                    disabled={submitting}
+                    className="px-5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium"
+                  >
+                    Submit
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Question Palette / Navigation Grid */}
+        <div
+          className={`${paletteOpen ? 'block' : 'hidden'
+            } md:block md:col-span-4 lg:col-span-3 bg-white border rounded-xl p-5 shadow-sm sticky top-6`}
+        >
+          <h3 className="font-bold text-gray-800 text-sm mb-3">Question Palette</h3>
+
+          {/* Legend */}
+          <div className="grid grid-cols-2 gap-2 text-xs mb-4 pb-3 border-b border-gray-100">
+            <div className="flex items-center gap-1.5">
+              <span className="w-3 h-3 rounded-full bg-emerald-500"></span>
+              <span className="text-gray-600">Answered</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-3 h-3 rounded-full bg-amber-400"></span>
+              <span className="text-gray-600">Review</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-3 h-3 rounded-full bg-gray-200"></span>
+              <span className="text-gray-600">Unanswered</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-3 h-3 rounded-full border-2 border-blue-600"></span>
+              <span className="text-gray-600">Current</span>
+            </div>
+          </div>
+
+          {/* Palette Grid */}
+          <div className="grid grid-cols-5 gap-2 max-h-[380px] overflow-y-auto pr-1">
+            {questions.map((q, idx) => {
+              const qAnswered = answers[q.id] !== undefined;
+              const qMarked = markedForReview.has(q.id);
+              const isCurrent = idx === currentIndex;
+
+              let btnStyle = 'bg-gray-100 text-gray-700 hover:bg-gray-200';
+              if (qAnswered && qMarked) {
+                btnStyle = 'bg-amber-500 text-white ring-2 ring-emerald-500';
+              } else if (qMarked) {
+                btnStyle = 'bg-amber-400 text-white';
+              } else if (qAnswered) {
+                btnStyle = 'bg-emerald-500 text-white';
+              }
+
+              return (
+                <button
+                  key={q.id}
+                  onClick={() => {
+                    setCurrentIndex(idx);
+                    setPaletteOpen(false);
+                  }}
+                  className={`h-9 w-full rounded-lg text-xs font-bold transition flex items-center justify-center ${btnStyle} ${isCurrent ? 'ring-2 ring-offset-1 ring-blue-600 scale-105' : ''
+                    }`}
+                >
+                  {idx + 1}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="mt-5 pt-3 border-t border-gray-100 text-center">
+            <span className="text-xs text-gray-400">
+              {Object.keys(answers).length} of {questions.length} answered
+            </span>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
