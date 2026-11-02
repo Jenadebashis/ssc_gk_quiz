@@ -88,7 +88,18 @@ export default function Quiz() {
   const [answers, setAnswers] = useState({});
   const [mistakeCounts, setMistakeCounts] = useState({});
 
-  const [showOptions, setShowOptions] = useState(false);
+  // Helper to read the Active Recall preference from Home page (defaults to true)
+  const getInitialShowOptions = () => {
+    try {
+      const saved = localStorage.getItem('quiz_active_recall');
+      const isRecallOn = saved !== null ? JSON.parse(saved) : true;
+      return !isRecallOn; // If Active Recall is OFF, show options immediately (true)
+    } catch {
+      return false;
+    }
+  };
+
+  const [showOptions, setShowOptions] = useState(getInitialShowOptions);
   const [feedback, setFeedback] = useState(null);
   const [reducePrompt, setReducePrompt] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -396,6 +407,7 @@ export default function Quiz() {
     if (!currentQuestion || !feedback) return;
 
     const remaining = queue.slice(1);
+    const shouldShowDirectly = getInitialShowOptions(); // true if Active Recall is OFF
 
     if (feedback.type === "correct") {
       if (remaining.length === 0) {
@@ -405,7 +417,7 @@ export default function Quiz() {
 
       setReducePrompt(null);
       setQueue(remaining);
-      setShowOptions(false);
+      setShowOptions(shouldShowDirectly); // Changed from setShowOptions(false)
       setFeedback(null);
       return;
     }
@@ -419,7 +431,7 @@ export default function Quiz() {
 
     setReducePrompt(null);
     setQueue(nextQueue);
-    setShowOptions(false);
+    setShowOptions(shouldShowDirectly); // Changed from setShowOptions(false)
     setFeedback(null);
   }
 
@@ -531,7 +543,9 @@ export default function Quiz() {
             ? "s"
             : ""
           }.`
-          : "Active recall: answer from memory before revealing the options."}
+          : !getInitialShowOptions()
+            ? "Active recall: answer from memory before revealing the options."
+            : "Select the correct option below."}
       </div>
 
       <div className="bg-white border rounded-xl p-6">

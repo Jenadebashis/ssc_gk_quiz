@@ -13,6 +13,17 @@ export default function Home() {
       return [];
     }
   });
+
+  // Active Recall preference: defaults to true if not explicitly set
+  const [activeRecall, setActiveRecall] = useState(() => {
+    try {
+      const saved = localStorage.getItem('quiz_active_recall');
+      return saved !== null ? JSON.parse(saved) : true;
+    } catch {
+      return true;
+    }
+  });
+
   const [isConfiguring, setIsConfiguring] = useState(false);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
@@ -26,6 +37,12 @@ export default function Home() {
     const { data } = await supabase.from('topics').select('*').order('name');
     if (data) setTopics(data);
     setLoading(false);
+  };
+
+  const handleToggleActiveRecall = () => {
+    const nextVal = !activeRecall;
+    setActiveRecall(nextVal);
+    localStorage.setItem('quiz_active_recall', JSON.stringify(nextVal));
   };
 
   const toggleTopicVisibility = (id) => {
@@ -56,20 +73,47 @@ export default function Home() {
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
-      {/* Header & Customize Action */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+      {/* Header, Active Recall Toggle & Customize Action */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">Available Subjects</h1>
           <p className="text-sm text-gray-500">
             Showing {displayedTopics.length} of {topics.length} subjects
           </p>
         </div>
-        <button
-          onClick={() => setIsConfiguring((prev) => !prev)}
-          className="px-4 py-2 text-sm font-medium border rounded-lg bg-white hover:bg-gray-50 shadow-sm"
-        >
-          {isConfiguring ? 'Done' : '⚙️ Customize Subjects'}
-        </button>
+
+        <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+          {/* Active Recall Switch Control */}
+          <div className="flex items-center gap-3 px-3 py-2 bg-white border border-gray-200 rounded-lg shadow-sm">
+            <div className="text-left">
+              <span className="text-xs font-bold text-gray-700 block leading-tight">
+                Active Recall
+              </span>
+              <span className="text-[11px] text-gray-400 block leading-tight">
+                {activeRecall ? 'Options Hidden' : 'Options Direct'}
+              </span>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleToggleActiveRecall}
+              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${activeRecall ? 'bg-black' : 'bg-gray-300'
+                }`}
+            >
+              <span
+                className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${activeRecall ? 'translate-x-4' : 'translate-x-0'
+                  }`}
+              />
+            </button>
+          </div>
+
+          <button
+            onClick={() => setIsConfiguring((prev) => !prev)}
+            className="px-4 py-2 text-sm font-medium border rounded-lg bg-white hover:bg-gray-50 shadow-sm transition"
+          >
+            {isConfiguring ? 'Done' : '⚙️ Customize Subjects'}
+          </button>
+        </div>
       </div>
 
       {/* Visibility Toggle Box */}
@@ -93,7 +137,7 @@ export default function Home() {
               return (
                 <label
                   key={t.id}
-                  className="flex items-center gap-2 p-2 bg-white rounded border border-gray-100 cursor-pointer text-sm"
+                  className="flex items-center gap-2 p-2 bg-white rounded border border-gray-100 cursor-pointer text-sm hover:bg-gray-50 transition"
                 >
                   <input
                     type="checkbox"
